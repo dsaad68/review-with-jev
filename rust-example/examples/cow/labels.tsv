@@ -1,0 +1,37 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	note
+c01.rs	no	no	no	no	no	no	Every parsed string (service key, message) is moved into an owned LogRecord sent over an mpsc channel to worker threads, so the allocations are required and Cow cannot avoid them.
+c02.rs	yes	no	no	no	no	no	unescape() returns raw.to_string() when the string literal has no backslashes, yet its result is only passed by reference to Interner::intern, so returning Cow<str> would let the common path borrow the source slice.
+c03.rs	yes	no	no	no	no	no	normalize_path() returns path.to_owned() when the path is already clean, but the result is only used for borrowed matching, so returning Cow<str> would avoid allocating on every well-formed request.
+c04.rs	no	no	no	no	no	no	The template filters already take and return Cow<'a, str> correctly, borrowing whenever the value is unchanged, so there is nothing left for Cow to improve.
+c05.rs	yes	no	yes	no	no	no	Config::expand() returns value.to_string() for values without ${...} references, which is most values, and callers only parse or display the result, so Cow<str> would let that path borrow from the layer map.
+c06.rs	no	no	no	no	no	no	The diff code works on borrowed &'a str lines and slices throughout and only allocates the final rendered report, so it has no redundant copies for Cow to remove.
+c07.rs	no	yes	no	no	no	no	Its waste is the kind Cow does not fix: an always-lowercased lookup key, a &String parameter that could be &str, a fresh buffer per term, and clones that are needed because they are mutated afterwards.
+c08.rs	yes	no	no	no	no	no	TextPass::run returns String, and most impls (StripControl, CollapseSpaces, FoldQuotes) return input.to_string() unchanged, so returning Cow<str> would avoid copying text that needs no change.
+c09.rs	yes	no	no	no	no	no	CsvWriter::escape_field() returns raw.to_string() for fields that need no quoting, which is nearly all of them, and the result is only written out as bytes, so Cow<str> would avoid the per-field allocation.
+c10.rs	no	no	no	no	no	no	Jobs, profiles and outcomes have to be owned or held in Arc to cross into worker threads, output paths are always newly formatted, and the cloned Profile is mutated, so Cow would not help.
+m01.rs	yes	no	no	no	no	no	Settings::resolve clones the stored String on both lookup hits (v.clone()) and only allocates for the missing-key fallback, so returning Cow<'_, str> would let found values borrow from the map.
+m02.rs	no	no	no	no	no	no	escape_html already returns Cow, borrowing when no characters need escaping and owning only when it rewrites them.
+m03.rs	yes	no	no	no	no	no	normalize does an early return path.to_owned() when the path is already clean, which a Cow<'_, str> return would turn into a borrow.
+m04.rs	no	no	no	no	no	no	slugify, hex_digest and permalink always build new strings that differ from their input, so there is no unchanged path for Cow to borrow.
+m05.rs	no	no	no	no	no	no	label_for's to_string branch looks like a Cow case, but the names go into Jobs that are moved into spawned threads after the prefix is dropped, so they must be owned 'static Strings.
+m06.rs	yes	no	no	no	no	no	dedup_preserving returns items.to_vec() when the slice already has no duplicates, so returning Cow<'_, [T]> would let that common path borrow the input.
+m07.rs	no	no	yes	no	no	no	The waste here is find taking an owned String, the lowercase lookup key and a fresh String per row; taking &str or reusing a buffer fixes these, and Cow on a return value would not.
+m08.rs	yes	no	no	no	no	no	with_scheme returns raw.to_string() when the URL already has a scheme, so Cow<'_, str> would avoid allocating for already-qualified URLs.
+m09.rs	no	no	no	no	no	no	The Order clone in amend is needed because it gets mutated and stored while the original moves into history, and load must own its fields because the raw input String is dropped.
+m10.rs	yes	no	no	no	no	no	Sanitizer::clean seeds its fold with input.to_string(), so lines that need no replacements are copied for nothing; a Cow<'_, str> accumulator would borrow until the first replacement actually happens.
+s01.rs	yes	no	no	no	no	no	clean_value() returns trimmed.to_string() when the value is not quoted, which could borrow the trimmed slice of the input.
+s02.rs	no	no	no	no	no	no	escape_html() already returns Cow and borrows the input when no characters need escaping.
+s03.rs	yes	no	no	no	no	no	sorted_readings() returns values.to_vec() when the slice is already sorted, which could borrow the input slice.
+s04.rs	no	no	no	no	no	no	slugify() always rewrites characters into a new String, so there is never an unchanged input to borrow.
+s05.rs	no	no	no	no	no	no	job_name() results are moved into thread::spawn closures that need owned static data, so a borrowed Cow would have to be converted to owned anyway.
+s06.rs	yes	no	no	no	no	no	normalize_tag() returns tag.to_string() when there are no uppercase letters, which could borrow the input.
+s07.rs	yes	no	no	no	no	no	resolve_path() returns target.to_path_buf() for absolute paths, which could borrow the input Path.
+s08.rs	no	no	yes	no	no	no	price_for() wastes an allocation building a String lookup key, but it returns Option<u32> and the fix is to look up by &str directly, not Cow.
+s09.rs	yes	no	no	no	no	no	display_name() clones the existing name from the map on the found path, which could borrow it and only allocate for the formatted default.
+s10.rs	no	no	no	no	no	no	file_extension() already returns a &str borrowed from the input with no allocation at all.
+complex.rs	yes	no	no	no	no	no	Config::get clones stored values and escape() returns s.to_owned() when nothing needs escaping
+main.rs	yes	no	no	no	no	no	the else branch returns input.to_string() for strings without spaces
+no_cow.rs	no	no	no	no	yes	no	every string is built by format!, rewritten or must be owned by a thread
+semi_no_cow.rs	no	no	no	no	no	no	labels and tags are always newly formatted and must outlive the dropped input
+very_complex.rs	yes	no	no	no	no	no	Transform::apply returns String, so Lower and Replace copy unchanged input; render and Memo::get copy too
+very_complex_no_cow.rs	no	no	no	no	no	no	only format! log lines sent between threads; the ledger formats itself without allocating

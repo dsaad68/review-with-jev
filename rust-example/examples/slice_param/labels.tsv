@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic
+x01.rs	no	no	no	no	no	no
+x02.rs	no	yes	no	no	no	no
+x03.rs	no	yes	no	no	no	no
+x04.rs	no	no	no	no	no	no
+x05.rs	no	yes	no	no	no	no
+x06.rs	no	no	no	no	no	no
+x07.rs	no	yes	no	no	no	no
+x08.rs	no	no	no	no	no	no
+x09.rs	no	yes	no	no	no	no
+x10.rs	no	no	no	no	no	no

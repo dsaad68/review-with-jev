@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	format_name takes two bools (surname_first, shout) and is called as format_name(first, last, true, false) and (.., false, true), unreadable at the call site.
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	The only bool parameter is the setter set_heating(on), whose meaning is obvious at call sites like t.set_heating(false).
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	The two bools live in a named WrapOptions struct built with field names, so the call wrap(text, &opts) has no bare true/false.
+x04.rs	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	sync(source, target, delete_extra, dry_run) takes two bools and is called as sync(&laptop, &mut backup, true, true) / (false, false), so the reader cannot tell which flag is which.
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Column alignment and border style use the Align and Border enums through builder methods; no function takes a bool parameter.
+x06.rs	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	Spooler::enqueue(doc, jump: bool) is a single bool whose meaning is not obvious at the call site: enqueue(Document {..}, true) does not say it jumps the queue.
+x07.rs	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	fit(src, max_w, max_h, keep_aspect, enlarge) takes two bools and is called as fit(size, 200, 200, true, false) and fit(size, 64, 64, false, true).
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Client configuration uses named builder methods (follow_redirects(true), max_hops, retry) and a RetryPolicy struct; no bare bool arguments to an unnamed parameter.
+x09.rs	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	Cache::get(key, refresh, track) and Cache::put(key, value, overwrite, mark_dirty) each take two bools, called as get(&sku, false, true) and put(102, 499, true, true).
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Fill and Mirror are enums, Layer::new takes no bool, and the only bool parameter is the obvious setter set_visible(false); bool-returning trait methods do not count.

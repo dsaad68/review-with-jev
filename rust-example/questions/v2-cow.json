@@ -1,0 +1,10 @@
+{
+  "cow": {
+    "type": "noul",
+    "instructions": "Would changing a function in this Rust code to return std::borrow::Cow remove real allocations? Cow helps only when some path allocates or clones a value identical to its input or to data that already exists, so it could return Cow::Borrowed there and Cow::Owned only when it actually changes the data. Judge only that. Allocations that are always needed, or waste that Cow would not fix (an allocated lookup key, a reusable buffer, a parameter that could just take &str), do not count.",
+    "criteria": {
+      "true": "Some path allocates or clones a value that equals its input or existing data unchanged (e.g. `else { s.to_string() }`, `Some(v) => v.clone()`, `return s.to_owned()`, a fold seeded with `input.to_string()`), and returning Cow would let that path borrow instead",
+      "false": "Every allocation builds genuinely new content (formatting, rewriting characters, combining values) or must be owned because it is moved into a thread or outlives its source; any remaining waste is not something Cow fixes"
+    }
+  }
+}

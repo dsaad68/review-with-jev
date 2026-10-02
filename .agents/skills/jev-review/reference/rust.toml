@@ -1,0 +1,287 @@
+# Rust code-quality checks for Jev: one yes/no question (a Noul) per check.
+#
+# Each question is asked about one changed function, and Jev returns the
+# probability that the issue is present. None of these is a compiler error;
+# they are judgment calls a reviewer would make.
+#
+# Read by ../script/review.sh, which also uses two kinds of comment that Jev
+# never sees (fuzzy-jev rejects unknown keys, so they cannot be TOML fields):
+#   # ext: .rs           which changed files this language covers
+#   # hint: <text>       the suggestion printed when the next question is a yes
+#
+# Format (fuzzy-jev 0.6+): name = check id, instruction = the question (say what does
+# NOT count as well as what does), criteria.true / criteria.false = what a yes
+# and a no look like. Long criteria are wrapped with TOML line continuations: a
+# trailing `\` joins the next line, so wrapping does not change the text.
+#
+# After editing, check the file before spending anything:
+#   jev --dry-run -q rust.toml 'fn x() {}' > /dev/null
+
+# ext: .rs
+
+# hint: Return `Cow` instead of copying input that is often unchanged
+[[question]]
+name = "cow"
+type = "noul"
+instruction = "Would changing a function in this Rust code to return std::borrow::Cow (Cow<str>, Cow<[T]>, Cow<Path>, ...) remove real allocations? Cow helps only when some path allocates or clones a value identical to its input or to data that already exists, so it could return Cow::Borrowed there and Cow::Owned only when it actually changes the data. Judge only that. Allocations that are always needed, or waste that Cow would not fix (an allocated lookup key, a reusable buffer, a parameter that could just take &str), do not count."
+
+[question.criteria]
+true = """\
+  Some path allocates or clones a value that equals its input or existing data unchanged \
+  (e.g. `else { s.to_string() }`, `Some(v) => v.clone()`, `return s.to_owned()`, `return \
+  items.to_vec()`, `path.to_path_buf()` for an already-good path, a fold seeded with \
+  `input.to_string()`), and returning Cow would let that path borrow instead"""
+false = """\
+  Every allocation builds genuinely new content (formatting, rewriting characters, \
+  combining values) or must be owned because it is moved into a thread or outlives its \
+  source, or the code already uses Cow correctly; any remaining waste is not something \
+  Cow fixes"""
+
+# hint: Take `&str` / `&[T]` / `&Path` instead of `&String` / `&Vec` / `&PathBuf`
+[[question]]
+name = "slice_param"
+type = "noul"
+instruction = "Does a function in this Rust code take a parameter as &String, &Vec<T>, &PathBuf or &Box<T> when it only reads it, so &str, &[T], &Path or &T would accept more callers at no cost? Owned parameters (String, Vec<T>) and &mut String / &mut Vec<T> that push or grow do not count."
+
+[question.criteria]
+true = """\
+  At least one function parameter is &String, &Vec<_>, &PathBuf or &Box<_> and the body \
+  only uses it in ways the borrowed slice type also supports"""
+false = """\
+  Parameters already use &str, &[T], &Path, &T or generics; or they are owned or &mut \
+  and the function needs the owned type's methods (push, reserve, etc.)"""
+
+# hint: Borrow or move instead of cloning
+[[question]]
+name = "needless_clone"
+type = "noul"
+instruction = "Does this Rust code call .clone(), .to_owned(), .to_string() or .to_vec() on a value that could simply be borrowed or moved instead, because the original is not used again or the callee only needs a reference? Clones whose result is later mutated while the original is still needed, clones into threads or other owners that need their own copy, and cheap Copy/Arc/Rc clones do not count. Changing a function's return type to Cow is a different issue and does not count here."
+
+[question.criteria]
+true = """\
+  A clone or owned copy is made and then only read, or the original is dropped or never \
+  used after it, so passing a reference or moving the value would do (e.g. \
+  `process(data.clone())` where data is unused afterwards, `let name = \
+  user.name.clone(); println!(\"{name}\")`)"""
+false = """\
+  Every clone is needed: the copy is mutated while the original is still used, it goes \
+  to a separate owner such as a thread or a collection that outlives the source, or it \
+  is a cheap Arc/Rc/Copy clone"""
+
+# hint: Return an error instead of `unwrap`/`expect` on input that can fail
+[[question]]
+name = "unwrap"
+type = "noul"
+instruction = "Does non-test Rust code here panic on a recoverable failure, by calling .unwrap(), .expect() or indexing on input from a file, the network, the user, parsing or a map lookup, inside a function that could reasonably return Result or Option instead? Unwrapping inside main of a tiny demo on hard-coded literals, on values the code has just proven valid, on lock poisoning, or on thread join does not count."
+
+[question.criteria]
+true = """\
+  A helper or library-style function unwraps or expects a parse, I/O, lookup or \
+  user-input result that can genuinely fail at runtime, crashing instead of returning an \
+  error to the caller"""
+false = """\
+  Fallible operations are propagated with ?, matched, or defaulted; any remaining unwrap \
+  is on a value that cannot fail (hard-coded literal, just-checked condition, Mutex \
+  lock, thread join)"""
+
+# hint: Use the iterator directly instead of collecting first
+[[question]]
+name = "needless_collect"
+type = "noul"
+instruction = "Does this Rust code collect an iterator into a Vec, String, HashMap or other collection only to iterate it once, take its length, check is_empty, get the first element or call contains on it, when the iterator could be used directly (count, any, next, find, chaining)? Collecting because the data is used several times, sorted, indexed, sent elsewhere, or needed to end a borrow does not count."
+
+[question.criteria]
+true = """\
+  A `.collect::<Vec<_>>()` or similar is followed only by a single pass such as \
+  `.len()`, `.is_empty()`, `.iter().sum()`, `[0]`/`.first()`, `.contains()` or one `for` \
+  loop, so the allocation could be removed"""
+false = """\
+  Every collected value is used more than once, sorted, indexed repeatedly, returned, \
+  stored, or the collect is needed to release a borrow before mutating the source"""
+
+# hint: Avoid the nested scan (use a `HashSet`/`HashMap`, `VecDeque` or `push_str`)
+[[question]]
+name = "quadratic"
+type = "noul"
+instruction = "Does this Rust code do accidental O(n^2) work that an easy change would make linear or n·log n, for data that can realistically grow: Vec::contains / iter().position / find inside a loop over another collection, Vec::remove(0) or insert(0, ..) in a loop, repeated string concatenation that copies the whole string each time, or re-scanning a collection per element? Loops over small fixed-size data, or inherently pairwise algorithms, do not count."
+
+[question.criteria]
+true = """\
+  A loop performs a linear search, shift or full copy per iteration over growable data, \
+  and a HashSet/HashMap, VecDeque, sort, or push_str would remove the nested scan"""
+false = """\
+  Lookups use hashing or sorted/binary search, queues use VecDeque, strings are built \
+  with push_str/write!, or any nested loop is over small fixed data or is an inherently \
+  pairwise computation"""
+
+# hint: Release the lock before slow work
+[[question]]
+name = "lock_scope"
+type = "noul"
+instruction = "Does this Rust code hold a Mutex or RwLock guard longer than it needs to, across slow or blocking work such as file or network I/O, thread::sleep, a channel send/recv, joining a thread, heavy computation, or taking a second lock? Guards that only cover the few lines that read or update the shared data, or that are dropped (explicitly or by scope) before the slow work, do not count."
+
+[question.criteria]
+true = """\
+  A lock guard is still alive while the code does I/O, sleeps, sends or receives on a \
+  channel, joins, runs an expensive loop or takes another lock, so other threads are \
+  blocked for no reason"""
+false = """\
+  Every guard is scoped to just the shared-data access (copied out, then dropped), or \
+  there are no locks"""
+
+# hint: Report or count errors instead of silently dropping them
+[[question]]
+name = "silent_error"
+type = "noul"
+instruction = "Does this Rust code silently throw away errors that the caller or user would want to know about, e.g. `let _ = fallible()`, `.ok();` on its own, `if let Ok(x) = ... { }` with no else, `unwrap_or_default()` / `unwrap_or(0)` on parse or I/O results that hide bad input, or `filter_map(|x| x.ok())` dropping failures without any count or log? Ignoring results that genuinely do not matter (best-effort cleanup, writing to a String with write!, a closed channel during shutdown) does not count."
+
+[question.criteria]
+true = """\
+  A parse, I/O, network or validation error is discarded or replaced by a default with \
+  no logging, counting or propagation, so bad data or failures pass unnoticed"""
+false = """\
+  Errors are propagated, returned, logged or counted, or the only ignored results are \
+  ones whose failure is harmless or impossible"""
+
+# hint: Use an enum instead of strings or magic numbers
+[[question]]
+name = "stringly_typed"
+type = "noul"
+instruction = "Does this Rust code represent a small closed set of states, kinds or commands as String/&str values or magic integers (e.g. `status: String` compared against \"active\" / \"banned\", `match kind { 1 => .., 2 => .. }`), where an enum would let the compiler check every case? Free-form text (names, messages, ids), values parsed into an enum at the boundary, and open-ended sets do not count."
+
+[question.criteria]
+true = """\
+  Code stores or passes a fixed set of variants as strings or numbers and compares or \
+  matches on literal values, with a fallback arm or no check for typos"""
+false = """\
+  Closed sets are already enums, or strings are only parsed once at the edge into an \
+  enum, or the strings are genuinely free-form data"""
+
+# hint: Replace bare `true`/`false` arguments with an enum or options struct
+[[question]]
+name = "boolean_trap"
+type = "noul"
+instruction = "Does a function in this Rust code take two or more bool parameters, or a single bool whose meaning is not obvious at the call site, so calls look like `render(&page, true, false)`? A single well-named bool in an obviously named setter (`set_visible(true)`) and bools inside a named options struct do not count."
+
+[question.criteria]
+true = """\
+  There is a call site where bare true/false arguments are passed and the reader cannot \
+  tell what they mean without looking at the function signature"""
+false = """\
+  Options are expressed with enums, named structs or builder methods, or the only bool \
+  parameter is self-explanatory"""
+
+# hint: Iterate (`iter`, `enumerate`, `zip`) instead of indexing in a loop
+[[question]]
+name = "index_loop"
+type = "noul"
+instruction = "Does this Rust code loop with `for i in 0..v.len()` (or a while counter) and index `v[i]` where iterating directly, `.iter().enumerate()`, `.zip()`, `.windows()` or `.chunks()` would be clearer and avoid bounds checks? Loops that genuinely need the index for arithmetic across several positions, mutate by index in a way iterators cannot express, or step irregularly do not count."
+
+[question.criteria]
+true = """\
+  An index-based loop only uses the index to read or write the current element of one or \
+  two collections, which an iterator adapter expresses directly"""
+false = """\
+  Loops already use iterators, or the index is needed for non-trivial position \
+  arithmetic (i-1, i+k, irregular jumps, swapping) that iterators would make harder to \
+  read"""
+
+# hint: Use the std method instead of a hand-written loop
+[[question]]
+name = "manual_reimpl"
+type = "noul"
+instruction = "Does this Rust code hand-write a loop that re-implements a standard library method that would be shorter and clearer, such as sum, product, max/min/max_by_key, any/all, position/find, count, retain, dedup, contains, join, extend, sort_by_key, or the HashMap entry/or_insert pattern? Loops that do several things at once in one pass, or need behaviour the std method lacks, do not count."
+
+[question.criteria]
+true = """\
+  A loop with a mutable accumulator or flag does exactly what one std method or iterator \
+  adapter does (e.g. manual sum, manual max tracking, `found = true; break`, building a \
+  String with separators by hand)"""
+false = """\
+  Std methods are used where they fit, or each manual loop combines several results in \
+  one pass or needs control flow a std method cannot express"""
+
+# hint: Use the `entry` API instead of looking the key up twice
+[[question]]
+name = "double_lookup"
+type = "noul"
+instruction = "Does this Rust code look up the same key in a HashMap/BTreeMap twice where the entry API or a single get/get_mut would do, e.g. `if map.contains_key(&k) { map.get_mut(&k).unwrap() ... } else { map.insert(k, ..) }`, or `if !map.contains_key(&k) { map.insert(..) }` followed by `map[&k]`? Separate lookups of different keys, or lookups in different maps, do not count."
+
+[question.criteria]
+true = """\
+  The same key is hashed and searched two or more times in a row (contains_key + \
+  get/insert/index, get + insert) where `entry(k).or_insert(..)`, `and_modify`, or one \
+  `get_mut` would do it once"""
+false = """\
+  Map updates use the entry API or a single get/get_mut/insert per key, or the repeated \
+  lookups are for different keys"""
+
+# hint: Use `try_from` instead of an `as` cast that can truncate or wrap
+[[question]]
+name = "lossy_cast"
+type = "noul"
+instruction = "Does this Rust code use `as` to convert between numeric types where the value can realistically be out of range or lose information, e.g. u64/usize as u32/u16/u8, i64 as i32, signed to unsigned on possibly negative values, or f64 as an integer on unchecked input, so it silently truncates or wraps instead of using try_from or a checked conversion? Widening casts (u32 as u64, i32 as f64), casts on values already range-checked, and small literals do not count."
+
+[question.criteria]
+true = """\
+  An `as` cast narrows or changes sign on a value that comes from input, a length, a sum \
+  or arithmetic and is not bounds-checked first, so large or negative values would \
+  silently become wrong"""
+false = """\
+  Only widening or lossless casts are used, or narrowing uses try_from/checked \
+  conversion, or the value is provably in range before the cast"""
+
+# hint: Guard the unsigned subtraction (`checked_sub` / `saturating_sub`)
+[[question]]
+name = "unsigned_underflow"
+type = "noul"
+instruction = "Does this Rust code subtract unsigned integers (usize, u32, u64, ...) where the right side can be larger than the left, e.g. `len - 1` on a possibly empty collection, `end - start` from unchecked input, or `a - b` for a difference that can go negative? This panics in debug builds and wraps to a huge number in release. Subtractions already guarded by a comparison, saturating_sub/checked_sub/abs_diff, or on values that cannot underflow do not count."
+
+[question.criteria]
+true = """\
+  An unsigned subtraction can underflow for some realistic input (empty input, \
+  out-of-order values, larger second operand) and nothing guards it"""
+false = """\
+  Every unsigned subtraction is guarded by a check, uses saturating/checked/abs_diff, or \
+  is provably non-negative (e.g. after an is_empty check)"""
+
+# hint: Avoid `==` on floats and floats for money
+[[question]]
+name = "float_misuse"
+type = "noul"
+instruction = "Does this Rust code misuse floating point: comparing computed f32/f64 values with == or !=, using floats for money or other exact decimal quantities, or using a float as a map key or loop counter? Comparing against an exact sentinel the code itself assigned (e.g. 0.0 for unset), and floats used for measurements, statistics, physics or graphics with tolerance comparisons, do not count."
+
+[question.criteria]
+true = """\
+  Money/prices/balances are stored as f32/f64, or the result of float arithmetic is \
+  compared for exact equality, so rounding errors produce wrong answers"""
+false = """\
+  Money uses integer minor units or a decimal type, float comparisons use a tolerance or \
+  ordering (<, >), and floats are only used for approximate quantities"""
+
+# hint: Break the `Rc`/`Arc` cycle with `Weak`
+[[question]]
+name = "rc_cycle"
+type = "noul"
+instruction = "Does this Rust code create a reference cycle of strong Rc/Arc pointers (e.g. a parent holding Rc<RefCell<Child>> and the child holding Rc<RefCell<Parent>>, a doubly linked list or graph with Rc in both directions, or an Arc captured in a closure stored inside that same Arc), so the memory is never freed? Back-references that use Weak, and Rc/Arc graphs that only point one way, do not count."
+
+[question.criteria]
+true = """\
+  Two or more values hold strong Rc/Arc pointers to each other (directly or through a \
+  chain), forming a cycle that keeps them alive forever"""
+false = """\
+  Ownership is a tree or DAG, and any back-pointers are Weak, indices, or ids"""
+
+# hint: Return a typed error enum instead of `String`
+[[question]]
+name = "string_errors"
+type = "noul"
+instruction = "Does library-style Rust code here (functions other than main that callers would want to react to) return errors as String, &str, or Box<dyn Error> built from format!, so callers cannot match on what went wrong? A dedicated error enum or struct, errors that are only ever printed in main or a tiny script, and wrapping an existing typed error do not count."
+
+[question.criteria]
+true = """\
+  A reusable function returns Result<_, String> (or &'static str, or a stringly Box<dyn \
+  Error>) with several distinct failure reasons that a caller might need to tell apart"""
+false = """\
+  Errors are typed (an enum or struct implementing Error/Display), or the stringly \
+  errors are only in main/one-off script code where nobody matches on them"""

@@ -1,0 +1,13 @@
+file	entity	planted	note
+main.rs	main	index_loop	for i in 0..inputs.len() { let input = inputs[i]; ... }
+main.rs	last_word	unsigned_underflow	words[words.len() - 1] on a possibly empty slice
+main.rs	parse_counts	silent_error	filter_map(|t| t.parse().ok()) drops bad numbers silently
+complex.rs	render	boolean_trap	render(&config, key, true, false)
+complex.rs	longest_key	manual_reimpl	hand-written max over key lengths
+no_cow.rs	load	double_lookup	contains_key + get_mut / insert instead of entry
+no_cow.rs	spawn_workers	(clean)	sort -> sort_unstable
+semi_no_cow.rs	matches_receipt	float_misuse	price * 0.9 == paid on f64 money
+semi_no_cow.rs	validate	string_errors	Result<(), String> with two distinct reasons
+semi_no_cow.rs	main	(clean)	1..=5 -> 1..=8, calls the new functions
+very_complex_no_cow.rs	run	lock_scope	write lock held across the whole rx loop, format and send
+very_complex_no_cow.rs	balance_u32	lossy_cast	self.balance as u32 on a possibly negative i128

@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: parse_duration_secs returns a typed DurationError enum that main matches on
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	YES: parse_rgb returns Result<_, String> with distinct failures (missing #, wrong length, non-ASCII, bad hex digit) callers cannot tell apart
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	YES: Account::withdraw returns &'static str for zero amount, insufficient funds and daily limit, which a caller would need to distinguish
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: parse_version returns a typed VersionError struct with a VersionErrorKind enum; main matches on the kind
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	YES: Calendar::book returns Box<dyn Error> built from format! strings for several distinct reasons (bad range, hours, unknown room, capacity, clash)
+x06.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: helpers return typed io::Error and ParseIntError; String errors only appear in main via map_err for printing
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	YES: Order::apply returns Result<Stage, String> with several distinct refusal reasons (wrong amount, already shipped, closed, invalid transition)
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: Backend methods return a typed StoreError enum implementing Error with From<io::Error>; increment matches on Conflict and NotFound
+x09.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: tokenizer and evaluator return a typed ExprError with an ErrorKind enum; main matches on UnknownVariable
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	YES: plan, execute and Task::run return Result<_, String> for duplicate task, unknown dependency, cycle, missing work and overflow

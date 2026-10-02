@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Only widening u8 as u32 / u8 as u64 casts; the narrowing back to u8 uses u8::try_from, so nothing truncates silently.
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	frame() writes payload.len() as u8 as the length prefix with no bounds check, so any payload over 255 bytes gets a wrapped, wrong length.
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	seconds_until() casts the signed difference (due_at - now) as u64, so an overdue job with a negative difference wraps to a huge wait.
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Float samples are checked for finiteness and clamped to [-1, 1] before the as i16 cast, and the byte length goes through u32::try_from plus checked_add/checked_mul.
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	load() parses config values as i64 and then narrows them with as u16 / as u8 / as u32 without range checks, so port = 70000 or workers = 300 silently wrap.
+x06.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	The f64 to usize bucket cast is preceded by a range check on value and clamped with min(last); the other casts (usize as f64, u32 as usize) widen.
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Value lengths are narrowed with u16::try_from and the error is returned; on decode u16 as usize only widens.
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	Entry::encode and Archive::encode write name.len() as u16, data.len() as u32, items.len() as u16 and the i64 timestamp as u32 without checks, so long names, big data or negative/late timestamps get corrupted.
+x09.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	summarize() narrows u64 totals with t.count as u32, (t.bytes / 1024) as u32 and the u64 average latency as u16 without checks, so large traffic or slow endpoints silently wrap.
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Chunk coordinates use i32::try_from with errors propagated, local index uses usize::try_from, heights are clamped to 0..=255 before as u8, and the mean uses u8::try_from.

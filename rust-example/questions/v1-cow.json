@@ -1,0 +1,10 @@
+{
+  "cow": {
+    "type": "noul",
+    "instructions": "Could this Rust code be improved by using std::borrow::Cow (Clone-on-Write) to avoid unnecessary allocations or clones?",
+    "criteria": {
+      "true": "The code allocates or clones data (e.g. to_string, to_owned, clone) on a path where the input is returned unchanged, so it could borrow in the unchanged case and only allocate when it actually modifies the data",
+      "false": "Every allocation is needed because the data is always modified or must be owned, or the code allocates nothing that could be borrowed instead"
+    }
+  }
+}

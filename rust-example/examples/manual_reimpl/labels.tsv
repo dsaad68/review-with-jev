@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	one loop tracks min, max and total together; several results in one pass
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	found flag with break over RESERVED re-implements contains/any
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	builds comma separated String by hand with a first flag; join does this
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	merges two sorted event streams with peek; std has no merge adapter
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	largest tracks best Option by floor_area_m2 manually; max_by_key does this
+x06.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	digest computes error count, warned routes, slowest and total in a single pass
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	INI parse loop is a state machine with continue, section tracking and early error returns
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	weed drains stock into a new Vec keeping undamaged volumes; retain does this
+x09.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	collector loop uses recv_timeout control flow and updates count, total, peak and faults per region at once
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	assign_at loops with enumerate, sets Some(i) and breaks; iter().position does this

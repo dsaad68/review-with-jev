@@ -1,0 +1,50 @@
+{
+  "cow": {
+    "type": "noul",
+    "instructions": "Would changing a function in this Rust code to return std::borrow::Cow (Cow<str>, Cow<[T]>, Cow<Path>, ...) remove real allocations? Cow helps only when some path allocates or clones a value identical to its input or to data that already exists, so it could return Cow::Borrowed there and Cow::Owned only when it actually changes the data. Judge only that. Allocations that are always needed, or waste that Cow would not fix (an allocated lookup key, a reusable buffer, a parameter that could just take &str), do not count.",
+    "criteria": {
+      "true": "Some path allocates or clones a value that equals its input or existing data unchanged (e.g. `else { s.to_string() }`, `Some(v) => v.clone()`, `return s.to_owned()`, `return items.to_vec()`, `path.to_path_buf()` for an already-good path, a fold seeded with `input.to_string()`), and returning Cow would let that path borrow instead",
+      "false": "Every allocation builds genuinely new content (formatting, rewriting characters, combining values) or must be owned because it is moved into a thread or outlives its source, or the code already uses Cow correctly; any remaining waste is not something Cow fixes"
+    }
+  },
+  "slice_param": {
+    "type": "noul",
+    "instructions": "Does a function in this Rust code take a parameter as &String, &Vec<T>, &PathBuf or &Box<T> when it only reads it, so &str, &[T], &Path or &T would accept more callers at no cost? Owned parameters (String, Vec<T>) and &mut String / &mut Vec<T> that push or grow do not count.",
+    "criteria": {
+      "true": "At least one function parameter is &String, &Vec<_>, &PathBuf or &Box<_> and the body only uses it in ways the borrowed slice type also supports",
+      "false": "Parameters already use &str, &[T], &Path, &T or generics; or they are owned or &mut and the function needs the owned type's methods (push, reserve, etc.)"
+    }
+  },
+  "needless_clone": {
+    "type": "noul",
+    "instructions": "Does this Rust code call .clone(), .to_owned(), .to_string() or .to_vec() on a value that could simply be borrowed or moved instead, because the original is not used again or the callee only needs a reference? Clones whose result is later mutated while the original is still needed, clones into threads or other owners that need their own copy, and cheap Copy/Arc/Rc clones do not count. Changing a function's return type to Cow is a different issue and does not count here.",
+    "criteria": {
+      "true": "A clone or owned copy is made and then only read, or the original is dropped or never used after it, so passing a reference or moving the value would do (e.g. `process(data.clone())` where data is unused afterwards, `let name = user.name.clone(); println!(\"{name}\")`)",
+      "false": "Every clone is needed: the copy is mutated while the original is still used, it goes to a separate owner such as a thread or a collection that outlives the source, or it is a cheap Arc/Rc/Copy clone"
+    }
+  },
+  "unwrap": {
+    "type": "noul",
+    "instructions": "Does non-test Rust code here panic on a recoverable failure, by calling .unwrap(), .expect() or indexing on input from a file, the network, the user, parsing or a map lookup, inside a function that could reasonably return Result or Option instead? Unwrapping inside main of a tiny demo on hard-coded literals, on values the code has just proven valid, on lock poisoning, or on thread join does not count.",
+    "criteria": {
+      "true": "A helper or library-style function unwraps or expects a parse, I/O, lookup or user-input result that can genuinely fail at runtime, crashing instead of returning an error to the caller",
+      "false": "Fallible operations are propagated with ?, matched, or defaulted; any remaining unwrap is on a value that cannot fail (hard-coded literal, just-checked condition, Mutex lock, thread join)"
+    }
+  },
+  "needless_collect": {
+    "type": "noul",
+    "instructions": "Does this Rust code collect an iterator into a Vec, String, HashMap or other collection only to iterate it once, take its length, check is_empty, get the first element or call contains on it, when the iterator could be used directly (count, any, next, find, chaining)? Collecting because the data is used several times, sorted, indexed, sent elsewhere, or needed to end a borrow does not count.",
+    "criteria": {
+      "true": "A `.collect::<Vec<_>>()` or similar is followed only by a single pass such as `.len()`, `.is_empty()`, `.iter().sum()`, `[0]`/`.first()`, `.contains()` or one `for` loop, so the allocation could be removed",
+      "false": "Every collected value is used more than once, sorted, indexed repeatedly, returned, stored, or the collect is needed to release a borrow before mutating the source"
+    }
+  },
+  "quadratic": {
+    "type": "noul",
+    "instructions": "Does this Rust code do accidental O(n^2) work that an easy change would make linear or n·log n, for data that can realistically grow: Vec::contains / iter().position / find inside a loop over another collection, Vec::remove(0) or insert(0, ..) in a loop, repeated string concatenation that copies the whole string each time, or re-scanning a collection per element? Loops over small fixed-size data, or inherently pairwise algorithms, do not count.",
+    "criteria": {
+      "true": "A loop performs a linear search, shift or full copy per iteration over growable data, and a HashSet/HashMap, VecDeque, sort, or push_str would remove the nested scan",
+      "false": "Lookups use hashing or sorted/binary search, queues use VecDeque, strings are built with push_str/write!, or any nested loop is over small fixed data or is an inherently pairwise computation"
+    }
+  }
+}

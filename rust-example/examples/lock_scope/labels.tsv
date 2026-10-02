@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	no	YES: flush_entries keeps the Mutex<Vec<String>> guard alive while writing every line to a file and calling sync_all
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: each lock only copies the seed out or stores the result; the expensive checksum runs with no guard held
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: the stock guard lives in an inner block that ends before the channel send
+x04.rs	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	no	YES: count_below holds the cache Mutex while entry().or_insert_with runs the full prime sieve, serializing all threads
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: rosters guard is scoped or explicitly dropped before the history lock is taken, and the sleep happens after join returns
+x06.rs	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	no	YES: dispatch_all holds the queue guard across a channel send and a blocking recv for each job's ack
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: export copies the counters into a Vec and drops the read guard before formatting and writing the file
+x08.rs	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	no	YES: transfer keeps the balances guard alive while taking the second journal lock
+x09.rs	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	no	YES: wait_all holds the running-map guard while joining every worker thread and also takes the finished lock inside that loop
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: admit clones the Arc config under a temporary read guard; reload reads the file before taking the write lock; usage lock covers only the counter update

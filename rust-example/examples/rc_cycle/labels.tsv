@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: children are strong Rc but the parent back-pointer is Weak, so the tree is freed
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	YES: Owner holds Rc<RefCell<Pet>> and each Pet holds Rc<RefCell<Owner>>, a strong two-way cycle
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	YES: the on_fail closure stored inside Retry captures a strong Rc clone of that same Retry
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: next links are strong Rc but prev links are Weak, so the doubly linked playlist has no strong cycle
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	YES: connect pushes a strong Rc in both directions, so every road forms a City<->City cycle
+x06.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: build targets share dependencies through Rc but edges only point toward dependencies, forming a DAG
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: click handlers stored in the Button capture only Weak references to it; the program shows it is released
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	YES: Exchange holds Arc<Mutex<trader>> subscribers and each MomentumTrader holds an Arc<Exchange>, a strong Arc cycle
+x09.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: reports are strong Rc downward, the manager link is Weak and the mentor is an id, and the directory index only points down
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	YES: the generic Deque nodes hold strong Rc for both next and prev, so adjacent nodes keep each other alive

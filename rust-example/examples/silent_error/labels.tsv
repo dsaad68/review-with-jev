@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	YES: parse_ports maps unparseable or out-of-range ports to 0 via unwrap_or(0) and filters them out, so bad config entries vanish without any report
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: all write and read errors propagate with ?; the only ignored result is best-effort removal of the temp file
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: parse failures are collected with their error text, printed and counted rather than dropped
+x04.rs	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	YES: load_latencies drops I/O line errors with filter_map(ok) and malformed latency lines with .ok(), so bad log rows disappear uncounted
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: ignored sends go to a progress monitor that may have quit (closed channel) and ignored write! targets a String; checksum failures are returned, counted and reported
+x06.rs	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	YES: load_config replaces bad port and timeout with unwrap_or_default/unwrap_or(30), ignores unparseable workers via if let Ok without else, and skips malformed lines
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: row errors are typed, logged with line numbers to stderr and counted; unwrap_or on the optional note column is not an error
+x08.rs	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	YES: Store::flush ignores create_dir_all, File::create, writeln and rename failures yet marks the store clean, and open silently skips unparseable entries
+x09.rs	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	no	no	no	YES: scan_shard skips files whose read_to_string fails (invalid UTF-8, missing) with Err(_) => continue, so the index silently covers fewer files
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	NO: validation problems are typed, logged per line and counted by kind; ignored results are only write! into a String, a Stop send to a worker that may have exited, and best-effort temp cleanup

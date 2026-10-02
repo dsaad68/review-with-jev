@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	calibrate loops 0..readings.len() only to read and write readings[i]; iter_mut would do
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	prefix sum mutates deposits[i] using deposits[i-1]; needs position arithmetic across elements
+x03.rs	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	print loops 0..players.len() reading players[i] and points[i]; zip expresses it directly
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	three-way partition with low/mid/high pointers and swaps; irregular stepping iterators cannot express
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	lexer while loop advances i by variable amounts while scanning runs of chars; irregular jumps
+x06.rs	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	restock indexes self.items[i] only to update the current item; iter_mut would do
+x07.rs	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	brighten reads and rewrites self.pixels[i] by index only; iter_mut would do
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	edit-distance DP needs table[i-1][j-1], table[i-1][j], a[i-1]; genuine multi-position arithmetic
+x09.rs	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	no	no	no	no	run_chain rewrites self.samples[i] by index and mix fills out[i] from left[i]/right[i]; iter_mut and zip would do
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	binary heap sift up/down uses parent (i-1)/2 and children 2i+1 with swaps; index arithmetic required

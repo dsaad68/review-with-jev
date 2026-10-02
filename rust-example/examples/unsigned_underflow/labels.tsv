@@ -1,0 +1,11 @@
+file	cow	slice_param	needless_clone	unwrap	needless_collect	quadratic	lock_scope	silent_error	stringly_typed	boolean_trap	index_loop	manual_reimpl	double_lookup	lossy_cast	unsigned_underflow	float_misuse	rc_cycle	string_errors	note
+x01.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	tail() computes lines.len() - n with no check, so asking for more lines than exist underflows (panics in debug, wraps in release).
+x02.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	values.len() - window + 1 runs only after the window == 0 || values.len() < window early return, so it cannot underflow.
+x03.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	duration_us() returns span.end_us - span.start_us on u64 fields with no ordering check, so an out-of-order span underflows.
+x04.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	All balance reductions use checked_sub and turn failure into InsufficientFunds; there is no raw unsigned subtraction.
+x05.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	search() computes idx - before for the context start, which underflows whenever a match occurs within the first `before` lines.
+x06.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	width - len runs only after the len >= width early return, gap - left is non-negative since left = gap / 2, ellipsize uses saturating_sub, column_gap uses abs_diff, and width - 7 is on a literal 24.
+x07.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	fulfil() does *level - qty on u32 stock with no check that enough stock exists, so ordering more than is on hand underflows.
+x08.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	Every depth - 1 / depth - 2 follows require(n) which returns an error when the stack is too shallow, and the step budget uses checked_sub.
+x09.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	yes	no	no	no	Limiter::check computes now - self.window_ms on u64 with no guard, which underflows whenever the clock reading is smaller than the window (e.g. a monotonic clock starting near 0); retry_after_ms uses saturating_sub.
+x10.rs	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	no	ByteRange::len's end - start is protected by the private-field constructor that rejects end < start, split() returns early when already >= total before total - already, and progress uses saturating_sub.

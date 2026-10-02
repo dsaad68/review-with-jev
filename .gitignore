@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pdb
+target/
+review.md
+.claude/settings.local.json
