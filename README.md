@@ -25,6 +25,25 @@ main.rs:1  last_word
   0.93  unsigned_underflow  Guard the unsigned subtraction (checked_sub / saturating_sub)
 ```
 
+## How it works
+
+```mermaid
+flowchart TD
+    A["A change to review<br/>uncommitted, staged, a branch or a commit"] --> B["sem diff --format json"]
+    B --> C["Changed functions<br/>file, name, line and new code"]
+    C --> D{{"One jev call per function<br/>16 calls in parallel"}}
+    Q["reference/rust.toml<br/>18 yes/no questions"] --> D
+    D --> E["Jev on OpenRouter<br/>answers every question at once"]
+    E --> F["A probability per check<br/>e.g. double_lookup 0.96"]
+    F --> G["Keep answers above the threshold<br/>and attach each check's hint"]
+    G --> H["Report<br/>plain text, or a table with --markdown"]
+```
+
+Each function is sent on its own, so findings point at a specific function and a slow or failed
+call only affects that one; failed calls are retried three times and then listed separately. All
+18 questions go in the same call, and Jev answers them independently, so adding a check costs a
+few tokens rather than another call.
+
 ## Quick start
 
 You need `bash`, `git` and `jq`, plus:
