@@ -67,11 +67,14 @@ $S -- --staged                       # staged changes
 $S -- --from main --to HEAD          # a branch
 $S --markdown -o review.md -- --from main
 $S -t 0.7                            # only findings above 0.7
+$S -M '~perplexity/pplx-decider-latest'   # ask another model
 ```
 
 Run it from inside the repository you want to review. Plain text goes to stdout; `--markdown` prints
 a table instead, for a PR comment or a file. A summary line (findings, cost, time) goes to stderr.
-`-h` lists every option.
+`-h` lists every option. `-M` takes any model `jev --help` lists; note that `-m` here is `--markdown`.
+Every check is a plain yes/no question, so all of them can answer it, but only Jev's numbers are
+measured below.
 
 To see it work on a change with known issues, run the demo:
 
@@ -237,7 +240,12 @@ python3 rust-example/eval.py rust-example/questions/v4.toml
 ```
 
 It asks every question about all 206 files (about $0.04 for v4), prints the scores per check and the
-files it got wrong, and writes `results/<name>.tsv`.
+files it got wrong, and writes `results/<name>.tsv`. To measure another model, name it after a
+threshold, which writes `results/<name>-<model>.tsv`:
+
+```sh
+python3 rust-example/eval.py rust-example/questions/v4.toml 0.5 '~perplexity/pplx-decider-latest'
+```
 
 ### How the questions got here
 

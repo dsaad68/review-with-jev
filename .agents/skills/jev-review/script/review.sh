@@ -3,12 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-m] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
+Usage: $(basename "$0") [-m] [-M model] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
 
 Finds changed functions with sem, asks Jev every question about each one in
 parallel, and prints what could be improved in each.
 
   -m, --markdown  print a markdown table instead of plain text
+  -M  model to ask, any id 'jev --help' lists        (default: jev's own)
   -l  language: reference/<lang>.toml               (default rust; available: $(available))
   -q  questions file instead of -l
   -t  report answers above this probability          (default 0.5)
@@ -33,6 +34,7 @@ JOBS=16
 EXT=
 EXT_SET=
 FORMAT=text
+MODEL=
 
 ARGS=()
 while [ $# -gt 0 ]; do
@@ -46,9 +48,10 @@ while [ $# -gt 0 ]; do
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
 
-while getopts "ml:q:t:o:j:e:h" opt; do
+while getopts "mM:l:q:t:o:j:e:h" opt; do
   case $opt in
     m) FORMAT=markdown ;;
+    M) MODEL=$OPTARG ;;
     l) LANG_NAME=$OPTARG ;;
     q) QUESTIONS=$OPTARG ;;
     t) THRESHOLD=$OPTARG ;;
@@ -76,7 +79,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/fn"
 
-jev --dry-run -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
+jev --dry-run -q "$QUESTIONS" ${MODEL:+-m "$MODEL"} 'check' >/dev/null 2>"$WORK/preflight.err" || {
   echo "jev rejected $QUESTIONS:" >&2; cat "$WORK/preflight.err" >&2; exit 1
 }
 
@@ -108,13 +111,13 @@ jq -r --arg dir "$WORK/fn" '
 
 if [ "$N" -gt 0 ]; then
   ls "$WORK"/fn/*.code | xargs -P "$JOBS" -I{} sh -c '
-    code=$1; questions=$2; base=${code%.code}
+    code=$1; questions=$2; model=$3; base=${code%.code}
     for attempt in 1 2 3; do
-      jev -f "$code" -q "$questions" --json > "$base.out" 2> "$base.err" && exit 0
+      jev -f "$code" -q "$questions" ${model:+-m "$model"} --json > "$base.out" 2> "$base.err" && exit 0
       sleep "$attempt"
     done
     jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
-  ' _ {} "$QUESTIONS"
+  ' _ {} "$QUESTIONS" "$MODEL"
 
   jq -nc --slurpfile e "$WORK/entities.jsonl" '
     (reduce inputs as $o ({};

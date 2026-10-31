@@ -1,16 +1,18 @@
 """Score a Jev questions file against the labelled examples.
 
-    python3 eval.py [questions file] [threshold]
+    python3 eval.py [questions file] [threshold] [model]
 
 Asks every question about every file in examples/*/ (one jev call per file,
 8 at a time), compares each answer with examples/*/labels.tsv, prints
 accuracy, precision, recall and AUC per labelled check, and writes every
-score to results/<questions file name>.tsv. A check is scored on the files
-whose labels.tsv has a column for it; checks with no labels are not scored.
+score to results/<questions file name>.tsv, or <name>-<model>.tsv with a
+model. A check is scored on the files whose labels.tsv has a column for it;
+checks with no labels are not scored.
 """
 
 import csv
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -20,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 QUESTIONS = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "questions/v4.toml"
 THRESHOLD = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
+MODEL = sys.argv[3] if len(sys.argv) > 3 else None
 
 
 def question_ids(path):
@@ -47,7 +50,7 @@ def label(file_labels, q):
 
 def ask(file):
     out = subprocess.run(
-        ["jev", "-f", file, "-q", str(QUESTIONS.resolve()), "--json"],
+        ["jev", "-f", file, "-q", str(QUESTIONS.resolve()), "--json", *(["-m", MODEL] if MODEL else [])],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -57,7 +60,7 @@ def ask(file):
     return (
         file,
         {k: a["noul"] for k, a in reply["answers"].items()},
-        reply["usage"]["cost"],
+        reply["usage"].get("cost") or 0,
     )
 
 
@@ -68,7 +71,8 @@ def main():
     with ThreadPoolExecutor(8) as pool:
         replies = {f: (s, c) for f, s, c in pool.map(ask, labels)}
 
-    out = ROOT / "results" / f"{QUESTIONS.stem}.tsv"
+    suffix = "-" + re.sub(r"[^A-Za-z0-9.-]+", "-", MODEL).strip("-") if MODEL else ""
+    out = ROOT / "results" / f"{QUESTIONS.stem}{suffix}.tsv"
     with open(out, "w") as f:
         f.write("file\t" + "\t".join(f"{q}_label\t{q}_score" for q in scored) + "\n")
         for file in sorted(replies):

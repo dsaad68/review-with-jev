@@ -35,6 +35,7 @@ $S --markdown -o review.md -- --from main # markdown table, saved to a file
 | Option | |
 | --- | --- |
 | `-m`, `--markdown` | A markdown table instead of plain text, e.g. for a PR comment or a file. |
+| `-M MODEL` | Ask another model; `jev --help` lists them. Default: jev's own, `~typesafe/jev-latest`. The notes below come from testing that one. |
 | `-l LANG` | Questions from `reference/LANG.toml` (default `rust`). |
 | `-q FILE` | Any other questions file. |
 | `-t N` | Report answers above N (default 0.5). |
