@@ -13,11 +13,48 @@ description: Review the functions changed in a diff for code-quality issues the 
 3. The answers above the threshold are printed per function: `file:line`, then each finding's
    score, check id and what could be improved. `--markdown` prints the same as a table.
 
-Requires `git`, `sem`, [fuzzy-jev](https://github.com/dsaad68/fuzzy-jev) 0.6+ (the `jev`
+Requires `git`, `sem`, [fuzzy-jev](https://github.com/dsaad68/fuzzy-jev) 0.7+ (the `jev`
 command, with `OPENROUTER_API_KEY` set) and `jq`. Run it from inside the repository being reviewed.
 
 **The code of every changed function is sent to OpenRouter.** Before reviewing code the user may
 consider private, make sure they are fine with that.
+
+## Choose the model first
+
+Look in `AGENTS.md` and `CLAUDE.md` (the project's, then the user's global ones) for the Jev model
+to use, written as a line like `Jev model: typesafe/jev-1.14`. If one is set, pass it with `-M`.
+
+If none is set, **ask the user which model to use before running the review**, and show them the
+list. Get it from `jev --list-models` (needs a connection, no key), which shows each model's context
+window, price and inputs, or from `jev --help` offline. The supported ones in fuzzy-jev 0.7:
+
+| Model | |
+| --- | --- |
+| `~typesafe/jev-latest` | TypeSafe's Jev, the latest version (1.14 since October 2026); jev's default |
+| `typesafe/jev-1.14`, `typesafe/jev-1.13` | Jev pinned to one version: the same scores until you change it. The README's accuracy numbers are 1.13's |
+| `jaredpalmer/kev-4b` | Kev 4B |
+| `respan/span-02` | Respan's Span 02 |
+| `respan/span-01`, `respan/span-01-lite`, `respan/span-01-lite:free` | yes/no only (fine here); skip the middle of anything past ~3,000 tokens, so long functions are half read |
+| `~liquid/d1-latest`, `liquid/d1.1`, `liquid/d1` | Liquid's d1 (`liquid/d1` leaves OpenRouter on 2026-11-20) |
+| `~liquid/d1-ultra-latest`, `liquid/d1-ultra` | Liquid's largest |
+| `~perplexity/pplx-decider-latest`, `perplexity/pplx-decider-v1.2` | Perplexity's Decider |
+| `~perplexity/pplx-decider-flash-latest`, `perplexity/pplx-decider-flash-v1.2` | the smaller Decider |
+| `baseten/mammoth-1`, `baseten/elephant-1`, `baseten/joey-1` | Baseten's, 27B, 9B and 2B |
+| `cloudflare/clef`, `cloudflare/clef-flash`, `cloudflare/clef-omni` | Cloudflare's Clef, 27B, 9B and mixture-of-experts |
+| `nace-ai/drex-max`, `nace-ai/drex-v2.0`, `nace-ai/drex-v1.5` | Nace.AI's Drex |
+| `openai/gpt-6-luna-decisions` | GPT-6 Luna, served for decisions |
+| `inception/mercury-decide` | Inception's Mercury Decide |
+| `microsoft/microsoft-decision-1` | Microsoft's Decision 1 |
+| `upstage/solar-decide`, `upstage/solar-decide-flash` | Upstage's Solar Decide |
+| `togethercomputer/tev1-4b-experimental` | Together AI's experimental Tev1 4B |
+| `scaledown/classify-1` | ScaleDown's Classify 1 |
+
+Every check is a yes/no question about text, so all of them can run it. Tell the user that the
+accuracy numbers in this repository's README were measured on `typesafe/jev-1.13`. Jev 1.14
+ranks as well but scores higher, so it raises more false alarms at 0.5 on `needless_collect`,
+`needless_clone`, `manual_reimpl`, `unwrap` and `stringly_typed`. Any other model's scores
+need checking (`JEV_MODEL=<id> python3 rust-example/eval.py` in the review-with-jev repository). After they choose, offer to add the
+`Jev model: <id>` line to `AGENTS.md` or `CLAUDE.md` so they aren't asked again.
 
 ## Run
 
@@ -30,11 +67,13 @@ $S -- --staged                            # staged changes only
 $S -- --from main --to HEAD               # a branch
 $S -- --commit abc1234                    # one commit
 $S --markdown -o review.md -- --from main # markdown table, saved to a file
+$S -M typesafe/jev-1.14 -- --staged       # another model
 ```
 
 | Option | |
 | --- | --- |
 | `-m`, `--markdown` | A markdown table instead of plain text, e.g. for a PR comment or a file. |
+| `-M ID`, `--model ID` | The Jev model (default `$JEV_MODEL`, else jev's own, `~typesafe/jev-latest`). Quote a `~` id. |
 | `-l LANG` | Questions from `reference/LANG.toml` (default `rust`). |
 | `-q FILE` | Any other questions file. |
 | `-t N` | Report answers above N (default 0.5). |

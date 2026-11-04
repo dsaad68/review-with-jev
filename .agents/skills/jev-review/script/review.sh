@@ -3,12 +3,14 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-m] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
+Usage: $(basename "$0") [-m] [-M model] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
 
 Finds changed functions with sem, asks Jev every question about each one in
 parallel, and prints what could be improved in each.
 
   -m, --markdown  print a markdown table instead of plain text
+  -M  the Jev model, e.g. typesafe/jev-1.14          (default \$JEV_MODEL, else jev's own default;
+                                                    'jev --list-models' lists them)
   -l  language: reference/<lang>.toml               (default rust; available: $(available))
   -q  questions file instead of -l
   -t  report answers above this probability          (default 0.5)
@@ -26,6 +28,7 @@ SKILL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 available() { ls "$SKILL_DIR/reference" 2>/dev/null | sed -n 's/\.toml$//p' | paste -sd, -; }
 
 LANG_NAME=rust
+MODEL=${JEV_MODEL:-}
 QUESTIONS=
 THRESHOLD=0.5
 OUT=-
@@ -38,6 +41,7 @@ ARGS=()
 while [ $# -gt 0 ]; do
   case $1 in
     --markdown) ARGS+=(-m) ;;
+    --model) ARGS+=(-M) ;;
     --help) ARGS+=(-h) ;;
     --) ARGS+=("$@"); break ;;
     *) ARGS+=("$1") ;;
@@ -46,9 +50,10 @@ while [ $# -gt 0 ]; do
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
 
-while getopts "ml:q:t:o:j:e:h" opt; do
+while getopts "mM:l:q:t:o:j:e:h" opt; do
   case $opt in
     m) FORMAT=markdown ;;
+    M) MODEL=$OPTARG ;;
     l) LANG_NAME=$OPTARG ;;
     q) QUESTIONS=$OPTARG ;;
     t) THRESHOLD=$OPTARG ;;
@@ -72,11 +77,14 @@ QUESTIONS=${QUESTIONS:-$SKILL_DIR/reference/$LANG_NAME.toml}
 QUESTIONS=$(cd "$(dirname "$QUESTIONS")" && pwd)/$(basename "$QUESTIONS")
 [ -n "$EXT_SET" ] || EXT=$(sed -n 's/^# ext: *//p' "$QUESTIONS" | head -1)
 
+MODEL_ARGS=()
+[ -n "$MODEL" ] && MODEL_ARGS=(-m "$MODEL")
+
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/fn"
 
-jev --dry-run -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
+jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
   echo "jev rejected $QUESTIONS:" >&2; cat "$WORK/preflight.err" >&2; exit 1
 }
 
@@ -100,7 +108,7 @@ jq -c --arg ext "$EXT" '
 ' "$WORK/diff.json" > "$WORK/entities.jsonl"
 
 N=$(wc -l < "$WORK/entities.jsonl" | tr -d ' ')
-echo "sem: $N changed functions" >&2
+echo "sem: $N changed functions${MODEL:+, model $MODEL}" >&2
 
 jq -r --arg dir "$WORK/fn" '
   "printf %s \(.code | @sh) > \($dir + "/" + (input_line_number | tostring) + ".code" | @sh)"
@@ -108,13 +116,13 @@ jq -r --arg dir "$WORK/fn" '
 
 if [ "$N" -gt 0 ]; then
   ls "$WORK"/fn/*.code | xargs -P "$JOBS" -I{} sh -c '
-    code=$1; questions=$2; base=${code%.code}
+    code=$1; questions=$2; shift 2; base=${code%.code}
     for attempt in 1 2 3; do
-      jev -f "$code" -q "$questions" --json > "$base.out" 2> "$base.err" && exit 0
+      jev "$@" -f "$code" -q "$questions" --json > "$base.out" 2> "$base.err" && exit 0
       sleep "$attempt"
     done
     jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
-  ' _ {} "$QUESTIONS"
+  ' _ {} "$QUESTIONS" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
 
   jq -nc --slurpfile e "$WORK/entities.jsonl" '
     (reduce inputs as $o ({};

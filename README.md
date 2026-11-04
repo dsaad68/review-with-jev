@@ -50,7 +50,7 @@ You need `bash`, `git` and `jq`, plus:
 
 ```sh
 brew install sem-cli             # sem; see https://github.com/Ataraxy-Labs/sem for other installs
-cargo install fuzzy-jev          # fuzzy-jev 0.6 or later, which provides the `jev` command
+cargo install fuzzy-jev          # fuzzy-jev 0.7 or later, which provides the `jev` command
 export OPENROUTER_API_KEY=...    # an OpenRouter API key
 ```
 
@@ -67,11 +67,27 @@ $S -- --staged                       # staged changes
 $S -- --from main --to HEAD          # a branch
 $S --markdown -o review.md -- --from main
 $S -t 0.7                            # only findings above 0.7
+$S -M typesafe/jev-1.14              # another model
 ```
 
 Run it from inside the repository you want to review. Plain text goes to stdout; `--markdown` prints
 a table instead, for a PR comment or a file. A summary line (findings, cost, time) goes to stderr.
 `-h` lists every option.
+
+### Choosing a model
+
+By default `jev` asks `~typesafe/jev-latest`, whichever Jev is newest. fuzzy-jev 0.7 supports 33
+models on OpenRouter's decisions endpoint; `jev --list-models` lists them with each one's context
+window, price and inputs. Pick one with `-M <id>` or by setting `JEV_MODEL`, which `eval.py` reads
+too. Every check is a yes/no question about text, so any of them can run the review, but the
+numbers below were measured on `typesafe/jev-1.13`; run `eval.py` before trusting another model's scores. Pin a
+version such as `typesafe/jev-1.14` if scores should not shift when a new Jev comes out.
+
+To pick a model once for a project, add a line to its `AGENTS.md` or `CLAUDE.md`:
+
+```markdown
+Jev model: typesafe/jev-1.14
+```
 
 To see it work on a change with known issues, run the demo:
 
@@ -87,7 +103,9 @@ clean edits (listed in [`demo/planted.tsv`](rust-example/demo/planted.tsv)), and
 [`.claude/skills/jev-review/`](.claude/skills/jev-review/) is a Claude Code skill. With this
 repository's `.claude/` folder in place, an agent asked to review a change runs the script and reads
 the results. Its [`SKILL.md`](.claude/skills/jev-review/SKILL.md) tells the agent to treat findings
-as leads to confirm in the code, not as verdicts, and lists the known false positives.
+as leads to confirm in the code, not as verdicts, and lists the known false positives. If neither
+`AGENTS.md` nor `CLAUDE.md` names a `Jev model:`, the agent asks you which model to use, shows you the
+list, and offers to save your choice there.
 
 ## The checks
 
@@ -167,7 +185,7 @@ jev --dry-run -q my-questions.toml 'x' > /dev/null
 
 ## How well it works
 
-Measured on 206 labelled Rust files in [`rust-example/examples/`](rust-example/examples/): small,
+Measured with `typesafe/jev-1.13` on 206 labelled Rust files in [`rust-example/examples/`](rust-example/examples/): small,
 medium and large programs, ten per check (36 for `cow`), written so that half of each check's
 examples have the issue and half are near misses that don't. A finding counts as a yes above 0.5.
 
@@ -203,6 +221,15 @@ Most checks rank almost perfectly but some real issues score just under 0.5; `ne
 `needless_collect` raise the most false alarms. In the demo, all ten planted issues are found above
 0.5.
 
+Since October 2026, `~typesafe/jev-latest` is Jev 1.14
+([`results/v4-jev-1.14.tsv`](rust-example/results/v4-jev-1.14.tsv), November 2026). It ranks as
+well as 1.13 (every AUC within 0.03) and finds about as many real issues, but it scores near
+misses higher, so more of them cross 0.5. Precision at 0.5 falls to 16% for `needless_collect` (from 42%), 22% for
+`needless_clone` (38%), 42% for `manual_reimpl` (67%), 44% for `unwrap` (67%) and 62% for
+`stringly_typed` (83%). At `-t 0.7` those five checks raise 4 false alarms instead of 67, but miss
+8 real issues instead of 3 (mostly `needless_clone` and `manual_reimpl`). To keep the numbers above,
+pin `-M typesafe/jev-1.13`.
+
 Things to know before relying on it:
 
 - **Each function is judged on its own.** Jev doesn't see callers or type definitions, so issues
@@ -234,10 +261,12 @@ To reproduce the table, or to test changes to a questions file (needs Python 3.1
 
 ```sh
 python3 rust-example/eval.py rust-example/questions/v4.toml
+JEV_MODEL=typesafe/jev-1.14 python3 rust-example/eval.py   # on another model: results/v4-jev-1.14.tsv
 ```
 
 It asks every question about all 206 files (about $0.04 for v4), prints the scores per check and the
-files it got wrong, and writes `results/<name>.tsv`.
+files it got wrong, and writes `results/<name>.tsv`, or `results/<name>-<model>.tsv` with
+`JEV_MODEL`.
 
 ### How the questions got here
 
