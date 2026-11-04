@@ -1,0 +1,17 @@
+{
+  "model": "nace-ai/drex-max",
+  "served": [
+    "nace-ai/drex-max-20261016"
+  ],
+  "date": "2026-11-04",
+  "questions": "rust-example/questions/v4.toml",
+  "calls_per_file": 2,
+  "files": 206,
+  "answered": 206,
+  "failed": {},
+  "price_per_million": 0.06,
+  "cost": 0.070637,
+  "wall_seconds": 137.5,
+  "latency_p50": 2.25,
+  "latency_p95": 3.96
+}

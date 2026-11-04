@@ -3,12 +3,14 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-m] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
+Usage: $(basename "$0") [-m] [-M model] [-l lang] [-q questions.toml] [-t threshold] [-o file] [-j jobs] [-e ext] [-- sem diff args...]
 
 Finds changed functions with sem, asks Jev every question about each one in
 parallel, and prints what could be improved in each.
 
   -m, --markdown  print a markdown table instead of plain text
+  -M  the model, e.g. typesafe/jev-1.14              (default \$JEV_MODEL, else ~liquid/d1-ultra-latest;
+                                                    'jev --list-models' lists them)
   -l  language: reference/<lang>.toml               (default rust; available: $(available))
   -q  questions file instead of -l
   -t  report answers above this probability          (default 0.5)
@@ -26,6 +28,8 @@ SKILL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 available() { ls "$SKILL_DIR/reference" 2>/dev/null | sed -n 's/\.toml$//p' | paste -sd, -; }
 
 LANG_NAME=rust
+# The default: the best at 0.5 in benchmark/README.md, at Jev's price.
+MODEL=${JEV_MODEL:-"~liquid/d1-ultra-latest"}
 QUESTIONS=
 THRESHOLD=0.5
 OUT=-
@@ -38,6 +42,7 @@ ARGS=()
 while [ $# -gt 0 ]; do
   case $1 in
     --markdown) ARGS+=(-m) ;;
+    --model) ARGS+=(-M) ;;
     --help) ARGS+=(-h) ;;
     --) ARGS+=("$@"); break ;;
     *) ARGS+=("$1") ;;
@@ -46,9 +51,10 @@ while [ $# -gt 0 ]; do
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
 
-while getopts "ml:q:t:o:j:e:h" opt; do
+while getopts "mM:l:q:t:o:j:e:h" opt; do
   case $opt in
     m) FORMAT=markdown ;;
+    M) MODEL=$OPTARG ;;
     l) LANG_NAME=$OPTARG ;;
     q) QUESTIONS=$OPTARG ;;
     t) THRESHOLD=$OPTARG ;;
@@ -72,13 +78,36 @@ QUESTIONS=${QUESTIONS:-$SKILL_DIR/reference/$LANG_NAME.toml}
 QUESTIONS=$(cd "$(dirname "$QUESTIONS")" && pwd)/$(basename "$QUESTIONS")
 [ -n "$EXT_SET" ] || EXT=$(sed -n 's/^# ext: *//p' "$QUESTIONS" | head -1)
 
+MODEL_ARGS=()
+[ -n "$MODEL" ] && MODEL_ARGS=(-m "$MODEL")
+
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/fn"
 
-jev --dry-run -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
+jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
   echo "jev rejected $QUESTIONS:" >&2; cat "$WORK/preflight.err" >&2; exit 1
 }
+
+# Models that refuse more than this many questions in one call get them over
+# several calls per function. Each question is answered on its own either way.
+case $MODEL in
+  nace-ai/drex-max) PER_CALL=16 ;;
+  *) PER_CALL=0 ;;
+esac
+mkdir -p "$WORK/parts"
+jev --dry-run -q "$QUESTIONS" 'check' | jq '.questions' > "$WORK/questions.json"
+COUNT=$(jq 'length' "$WORK/questions.json")
+if [ "$PER_CALL" -gt 0 ] && [ "$COUNT" -gt "$PER_CALL" ]; then
+  CALLS=$(( (COUNT + PER_CALL - 1) / PER_CALL ))
+  SIZE=$(( (COUNT + CALLS - 1) / CALLS ))
+  for i in $(seq 0 $((CALLS - 1))); do
+    jq --argjson i "$i" --argjson n "$SIZE" 'to_entries[$i * $n:($i + 1) * $n] | from_entries' \
+      "$WORK/questions.json" > "$WORK/parts/$i.json"
+  done
+else
+  cp "$WORK/questions.json" "$WORK/parts/0.json"
+fi
 
 awk '
   /^# hint:/ { sub(/^# hint: */, ""); hint = $0; next }
@@ -100,21 +129,30 @@ jq -c --arg ext "$EXT" '
 ' "$WORK/diff.json" > "$WORK/entities.jsonl"
 
 N=$(wc -l < "$WORK/entities.jsonl" | tr -d ' ')
-echo "sem: $N changed functions" >&2
+echo "sem: $N changed functions${MODEL:+, model $MODEL}" >&2
 
 jq -r --arg dir "$WORK/fn" '
   "printf %s \(.code | @sh) > \($dir + "/" + (input_line_number | tostring) + ".code" | @sh)"
 ' "$WORK/entities.jsonl" | sh
 
 if [ "$N" -gt 0 ]; then
+  export JEV_REVIEW_MODEL=$MODEL
   ls "$WORK"/fn/*.code | xargs -P "$JOBS" -I{} sh -c '
-    code=$1; questions=$2; base=${code%.code}
-    for attempt in 1 2 3; do
-      jev -f "$code" -q "$questions" --json > "$base.out" 2> "$base.err" && exit 0
-      sleep "$attempt"
+    code=$1; shift; base=${code%.code}
+    for part in "$@"; do
+      out=$base.$(basename "$part" .json).part
+      ok=
+      for attempt in 1 2 3; do
+        jev ${JEV_REVIEW_MODEL:+-m "$JEV_REVIEW_MODEL"} -f "$code" -q "$part" --json > "$out" 2> "$base.err" && { ok=1; break; }
+        sleep "$attempt"
+      done
+      [ -n "$ok" ] || {
+        jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
+        exit 0
+      }
     done
-    jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
-  ' _ {} "$QUESTIONS"
+    jq -s "{answers: (map(.answers) | add), usage: {cost: (map(.usage.cost // 0) | add)}}" "$base".*.part > "$base.out"
+  ' _ {} "$WORK"/parts/*.json
 
   jq -nc --slurpfile e "$WORK/entities.jsonl" '
     (reduce inputs as $o ({};

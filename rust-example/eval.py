@@ -5,12 +5,15 @@
 Asks every question about every file in examples/*/ (one jev call per file,
 8 at a time), compares each answer with examples/*/labels.tsv, prints
 accuracy, precision, recall and AUC per labelled check, and writes every
-score to results/<questions file name>.tsv. A check is scored on the files
+score to results/<questions file name>.tsv. Set JEV_MODEL to ask another
+model than jev's default (see `jev --list-models`); its scores go to
+results/<questions file name>-<model name>.tsv, e.g. v4-jev-1.14.tsv. A check is scored on the files
 whose labels.tsv has a column for it; checks with no labels are not scored.
 """
 
 import csv
 import json
+import os
 import subprocess
 import sys
 import tomllib
@@ -20,6 +23,10 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 QUESTIONS = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "questions/v4.toml"
 THRESHOLD = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
+MODEL_ID = os.environ.get("JEV_MODEL", "")
+MODEL = ["-m", MODEL_ID] if MODEL_ID else []
+# "~typesafe/jev-latest" -> "-jev-latest", "respan/span-01-lite:free" -> "-span-01-lite-free"
+SUFFIX = "-" + MODEL_ID.rsplit("/", 1)[-1].replace(":", "-") if MODEL_ID else ""
 
 
 def question_ids(path):
@@ -47,7 +54,7 @@ def label(file_labels, q):
 
 def ask(file):
     out = subprocess.run(
-        ["jev", "-f", file, "-q", str(QUESTIONS.resolve()), "--json"],
+        ["jev", *MODEL, "-f", file, "-q", str(QUESTIONS.resolve()), "--json"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -68,7 +75,7 @@ def main():
     with ThreadPoolExecutor(8) as pool:
         replies = {f: (s, c) for f, s, c in pool.map(ask, labels)}
 
-    out = ROOT / "results" / f"{QUESTIONS.stem}.tsv"
+    out = ROOT / "results" / f"{QUESTIONS.stem}{SUFFIX}.tsv"
     with open(out, "w") as f:
         f.write("file\t" + "\t".join(f"{q}_label\t{q}_score" for q in scored) + "\n")
         for file in sorted(replies):

@@ -1,0 +1,17 @@
+{
+  "model": "baseten/elephant-1",
+  "served": [
+    "baseten/elephant-1-20261021"
+  ],
+  "date": "2026-11-04",
+  "questions": "rust-example/questions/v4.toml",
+  "files": 206,
+  "answered": 206,
+  "failed": {},
+  "price_per_million": 0.035,
+  "cost": 0.031544,
+  "wall_seconds": 13.6,
+  "latency_p50": 0.52,
+  "latency_p95": 0.63,
+  "calls_per_file": 1
+}

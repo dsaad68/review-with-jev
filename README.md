@@ -8,21 +8,24 @@ It combines two tools:
 
 - **[sem](https://github.com/Ataraxy-Labs/sem)** finds which functions a diff added or changed, and
   gives each one's new code.
-- **[fuzzy-jev](https://github.com/dsaad68/fuzzy-jev)** (the `jev` command) asks Jev, TypeSafe's
-  model on OpenRouter's decisions endpoint, a fixed set of yes/no questions about each function and
-  returns a probability per question instead of prose.
+- **[fuzzy-jev](https://github.com/dsaad68/fuzzy-jev)** (the `jev` command) asks a model on
+  OpenRouter's decisions endpoint a fixed set of yes/no questions about each function and returns a
+  probability per question instead of prose. The review uses Liquid's `~liquid/d1-ultra-latest` by
+  default, the best of nine models [benchmarked](benchmark/) on these checks; TypeSafe's Jev and the
+  others are a `-M` away.
 
 Every changed function is reviewed against 18 checks in one call, 16 calls at a time. A typical
 change takes about a second and costs a fraction of a cent: the demo below reviews 14 functions for
-$0.0023 (at OpenRouter's prices in October 2026; costs here are what fuzzy-jev reported at the time).
+$0.0021 (at OpenRouter's prices in November 2026; costs here are what fuzzy-jev reported at the time).
 
 ```text
-no_cow.rs:37  load
-  0.96  double_lookup       Use the entry API instead of looking the key up twice
-  0.86  silent_error        Report or count errors instead of silently dropping them
-
 main.rs:1  last_word
-  0.93  unsigned_underflow  Guard the unsigned subtraction (checked_sub / saturating_sub)
+  0.99  unsigned_underflow  Guard the unsigned subtraction (checked_sub / saturating_sub)
+  0.90  unwrap              Return an error instead of unwrap/expect on input that can fail
+
+no_cow.rs:37  load
+  0.98  double_lookup       Use the entry API instead of looking the key up twice
+  0.93  silent_error        Report or count errors instead of silently dropping them
 ```
 
 ## How it works
@@ -33,7 +36,7 @@ flowchart TD
     B --> C["Changed functions<br/>file, name, line and new code"]
     C --> D{{"One jev call per function<br/>16 calls in parallel"}}
     Q["reference/rust.toml<br/>18 yes/no questions"] --> D
-    D --> E["Jev on OpenRouter<br/>answers every question at once"]
+    D --> E["A decision model on OpenRouter<br/>d1-ultra by default<br/>answers every question at once"]
     E --> F["A probability per check<br/>e.g. double_lookup 0.96"]
     F --> G["Keep answers above the threshold<br/>and attach each check's hint"]
     G --> H["Report<br/>plain text, or a table with --markdown"]
@@ -50,7 +53,7 @@ You need `bash`, `git` and `jq`, plus:
 
 ```sh
 brew install sem-cli             # sem; see https://github.com/Ataraxy-Labs/sem for other installs
-cargo install fuzzy-jev          # fuzzy-jev 0.6 or later, which provides the `jev` command
+cargo install fuzzy-jev          # fuzzy-jev 0.7 or later, which provides the `jev` command
 export OPENROUTER_API_KEY=...    # an OpenRouter API key
 ```
 
@@ -67,11 +70,29 @@ $S -- --staged                       # staged changes
 $S -- --from main --to HEAD          # a branch
 $S --markdown -o review.md -- --from main
 $S -t 0.7                            # only findings above 0.7
+$S -M typesafe/jev-1.14              # another model
 ```
 
 Run it from inside the repository you want to review. Plain text goes to stdout; `--markdown` prints
 a table instead, for a PR comment or a file. A summary line (findings, cost, time) goes to stderr.
 `-h` lists every option.
+
+### Choosing a model
+
+The review asks `~liquid/d1-ultra-latest` by default: of the nine models in
+[the benchmark](#other-models) it did best at the default threshold, for the same price as Jev.
+fuzzy-jev 0.7 supports 33 models on OpenRouter's decisions endpoint; `jev --list-models` lists them
+with each one's context window, price and inputs. Pick another with `-M <id>` or by setting
+`JEV_MODEL`. Every check is a yes/no question about text, so any of them can run the review. Pin a
+version, such as `liquid/d1-ultra` or `typesafe/jev-1.14`, if scores should not shift when a new
+one comes out. `eval.py` asks jev's own default, Jev, unless `JEV_MODEL` is set, and the accuracy
+table below is Jev 1.13's.
+
+To pick a model for a project, add a line to its `AGENTS.md` or `CLAUDE.md`:
+
+```markdown
+Jev model: typesafe/jev-1.14
+```
 
 To see it work on a change with known issues, run the demo:
 
@@ -87,7 +108,9 @@ clean edits (listed in [`demo/planted.tsv`](rust-example/demo/planted.tsv)), and
 [`.claude/skills/jev-review/`](.claude/skills/jev-review/) is a Claude Code skill. With this
 repository's `.claude/` folder in place, an agent asked to review a change runs the script and reads
 the results. Its [`SKILL.md`](.claude/skills/jev-review/SKILL.md) tells the agent to treat findings
-as leads to confirm in the code, not as verdicts, and lists the known false positives.
+as leads to confirm in the code, not as verdicts, and lists the known false positives. The agent
+uses `~liquid/d1-ultra-latest` unless you name another model in the conversation or in a
+`Jev model:` line in `AGENTS.md` or `CLAUDE.md`, and says which model it used.
 
 ## The checks
 
@@ -167,7 +190,7 @@ jev --dry-run -q my-questions.toml 'x' > /dev/null
 
 ## How well it works
 
-Measured on 206 labelled Rust files in [`rust-example/examples/`](rust-example/examples/): small,
+Measured with `typesafe/jev-1.13` on 206 labelled Rust files in [`rust-example/examples/`](rust-example/examples/): small,
 medium and large programs, ten per check (36 for `cow`), written so that half of each check's
 examples have the issue and half are near misses that don't. A finding counts as a yes above 0.5.
 
@@ -203,11 +226,44 @@ Most checks rank almost perfectly but some real issues score just under 0.5; `ne
 `needless_collect` raise the most false alarms. In the demo, all ten planted issues are found above
 0.5.
 
+Since October 2026, `~typesafe/jev-latest` is Jev 1.14
+([`results/v4-jev-1.14.tsv`](rust-example/results/v4-jev-1.14.tsv), November 2026). It ranks as
+well as 1.13 (every AUC within 0.03) and finds about as many real issues, but it scores near
+misses higher, so more of them cross 0.5. Precision at 0.5 falls to 16% for `needless_collect` (from 42%), 22% for
+`needless_clone` (38%), 42% for `manual_reimpl` (67%), 44% for `unwrap` (67%) and 62% for
+`stringly_typed` (83%). At `-t 0.7` those five checks raise 4 false alarms instead of 67, but miss
+8 real issues instead of 3 (mostly `needless_clone` and `manual_reimpl`). To keep the numbers above,
+pin `-M typesafe/jev-1.13`.
+
+### Other models
+
+[`benchmark/`](benchmark/) runs the same 206 files on nine models (November 2026, one run each). All
+of them rank well; they differ in how high they score near misses, so the default 0.5 suits some
+better than others. Summary (full tables, per-check AUC and caveats in
+[`benchmark/README.md`](benchmark/README.md)):
+
+| Model | Mean AUC | Found at 0.5 | False alarms at 0.5 | Best threshold | Price ($/1M input) | Cost, 206 files |
+| --- | --- | --- | --- | --- | --- | --- |
+| `nace-ai/drex-max` | 0.997 | 105/108 | 24 | 0.80 | $0.060 | $0.071 |
+| `~liquid/d1-ultra-latest` (the review's default) | 0.997 | 103/108 | 11 | 0.60 | $0.042 | $0.036 |
+| `baseten/mammoth-1` | 0.995 | 104/108 | 55 | 0.70 | $0.100 | $0.090 |
+| `~typesafe/jev-latest` (jev's default) | 0.991 | 99/108 | 75 | 0.65 | $0.042 | $0.038 |
+| `~liquid/d1-latest` | 0.989 | 96/108 | 34 | 0.75 | $0.020 | $0.017 |
+| `microsoft/microsoft-decision-1` | 0.987 | 101/108 | 166 | 0.95 | $0.042 | $0.036 |
+| `cloudflare/clef` | 0.983 | 98/108 | 47 | 0.60 | $0.192 | $0.221 |
+| `openai/gpt-6-luna-decisions` | 0.980 | 92/108 | 91 | 0.85 | $0.100 | $0.131 |
+| `baseten/elephant-1` | 0.976 | 85/108 | 175 | 0.80 | $0.035 | $0.032 |
+
+False alarms are out of 2,568 labelled near misses. `~liquid/d1-ultra-latest` did best at the default threshold, for
+Jev's price; `nace-ai/drex-max` found the most but takes two calls per function (it accepts at most
+16 questions, and the script splits the 18). With another model, pass its best threshold with `-t`.
+The best thresholds were picked on these same files, so treat them as a starting point.
+
 Things to know before relying on it:
 
-- **Each function is judged on its own.** Jev doesn't see callers or type definitions, so issues
-  that depend on context score lower even when real: `lossy_cast` and `lock_scope` came in at
-  0.56–0.67 in the demo. Callers also inherit their callees' findings.
+- **Each function is judged on its own.** The model doesn't see callers or type definitions, so
+  issues that depend on context score lower even when real: `lossy_cast` and `lock_scope` came in
+  at 0.78–0.80 in the demo with the default model, and 0.56–0.67 with Jev. Callers also inherit their callees' findings.
 - **`unwrap` fires on lock, join and channel-send unwraps**, which its question excludes.
 - **`needless_clone` overlaps with `cow`**: a `clone()` on a return path trips both.
 - **These are leads, not verdicts.** Use it to comment on PRs, not to block merges. Confirm a
@@ -222,6 +278,7 @@ Things to know before relying on it:
   jev-review/          the review skill: SKILL.md, script/review.sh, reference/rust.toml
   jev/, sem/           skills for the two underlying tools
 .agents/skills/        the same skills, for agents that read .agents/
+benchmark/             nine models on the labelled examples: bench.py, results/, README.md
 rust-example/
   questions/           every version of the checks: v1-cow, v2-cow (Cow only), v3 (6 checks), v4 (18)
   examples/<check>/    labelled examples, one folder per check, with labels.tsv
@@ -234,10 +291,12 @@ To reproduce the table, or to test changes to a questions file (needs Python 3.1
 
 ```sh
 python3 rust-example/eval.py rust-example/questions/v4.toml
+JEV_MODEL=typesafe/jev-1.14 python3 rust-example/eval.py   # on another model: results/v4-jev-1.14.tsv
 ```
 
 It asks every question about all 206 files (about $0.04 for v4), prints the scores per check and the
-files it got wrong, and writes `results/<name>.tsv`.
+files it got wrong, and writes `results/<name>.tsv`, or `results/<name>-<model>.tsv` with
+`JEV_MODEL`.
 
 ### How the questions got here
 
