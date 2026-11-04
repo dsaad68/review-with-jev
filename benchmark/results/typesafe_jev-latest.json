@@ -1,0 +1,17 @@
+{
+  "model": "~typesafe/jev-latest",
+  "served": [
+    "typesafe/jev-1.14-20261014"
+  ],
+  "date": "2026-11-04",
+  "questions": "rust-example/questions/v4.toml",
+  "files": 206,
+  "answered": 206,
+  "failed": {},
+  "price_per_million": 0.042,
+  "cost": 0.038313,
+  "wall_seconds": 10.1,
+  "latency_p50": 0.38,
+  "latency_p95": 0.49,
+  "calls_per_file": 1
+}

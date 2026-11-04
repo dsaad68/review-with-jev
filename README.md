@@ -80,7 +80,8 @@ By default `jev` asks `~typesafe/jev-latest`, whichever Jev is newest. fuzzy-jev
 models on OpenRouter's decisions endpoint; `jev --list-models` lists them with each one's context
 window, price and inputs. Pick one with `-M <id>` or by setting `JEV_MODEL`, which `eval.py` reads
 too. Every check is a yes/no question about text, so any of them can run the review, but the
-numbers below were measured on `typesafe/jev-1.13`; run `eval.py` before trusting another model's scores. Pin a
+numbers below were measured on `typesafe/jev-1.13`; [the benchmark](#other-models) compares nine
+models, and `eval.py` checks any other. Pin a
 version such as `typesafe/jev-1.14` if scores should not shift when a new Jev comes out.
 
 To pick a model once for a project, add a line to its `AGENTS.md` or `CLAUDE.md`:
@@ -230,6 +231,30 @@ misses higher, so more of them cross 0.5. Precision at 0.5 falls to 16% for `nee
 8 real issues instead of 3 (mostly `needless_clone` and `manual_reimpl`). To keep the numbers above,
 pin `-M typesafe/jev-1.13`.
 
+### Other models
+
+[`benchmark/`](benchmark/) runs the same 206 files on nine models (November 2026, one run each). All
+of them rank well; they differ in how high they score near misses, so the default 0.5 suits some
+better than others. Summary (full tables, per-check AUC and caveats in
+[`benchmark/README.md`](benchmark/README.md)):
+
+| Model | Mean AUC | Found at 0.5 | False alarms at 0.5 | Best threshold | Price ($/1M input) | Cost, 206 files |
+| --- | --- | --- | --- | --- | --- | --- |
+| `nace-ai/drex-max` | 0.997 | 105/108 | 24 | 0.80 | $0.060 | $0.071 |
+| `~liquid/d1-ultra-latest` | 0.997 | 103/108 | 11 | 0.60 | $0.042 | $0.036 |
+| `baseten/mammoth-1` | 0.995 | 104/108 | 55 | 0.70 | $0.100 | $0.090 |
+| `~typesafe/jev-latest` (default) | 0.991 | 99/108 | 75 | 0.65 | $0.042 | $0.038 |
+| `~liquid/d1-latest` | 0.989 | 96/108 | 34 | 0.75 | $0.020 | $0.017 |
+| `microsoft/microsoft-decision-1` | 0.987 | 101/108 | 166 | 0.95 | $0.042 | $0.036 |
+| `cloudflare/clef` | 0.983 | 98/108 | 47 | 0.60 | $0.192 | $0.221 |
+| `openai/gpt-6-luna-decisions` | 0.980 | 92/108 | 91 | 0.85 | $0.100 | $0.131 |
+| `baseten/elephant-1` | 0.976 | 85/108 | 175 | 0.80 | $0.035 | $0.032 |
+
+False alarms are out of 2,568 labelled near misses. `~liquid/d1-ultra-latest` did best at the default threshold, for
+Jev's price; `nace-ai/drex-max` found the most but takes two calls per function (it accepts at most
+16 questions, and the script splits the 18). With another model, pass its best threshold with `-t`.
+The best thresholds were picked on these same files, so treat them as a starting point.
+
 Things to know before relying on it:
 
 - **Each function is judged on its own.** Jev doesn't see callers or type definitions, so issues
@@ -249,6 +274,7 @@ Things to know before relying on it:
   jev-review/          the review skill: SKILL.md, script/review.sh, reference/rust.toml
   jev/, sem/           skills for the two underlying tools
 .agents/skills/        the same skills, for agents that read .agents/
+benchmark/             nine models on the labelled examples: bench.py, results/, README.md
 rust-example/
   questions/           every version of the checks: v1-cow, v2-cow (Cow only), v3 (6 checks), v4 (18)
   examples/<check>/    labelled examples, one folder per check, with labels.tsv

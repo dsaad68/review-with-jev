@@ -1,0 +1,17 @@
+{
+  "model": "~liquid/d1-latest",
+  "served": [
+    "liquid/d1.1-20261027"
+  ],
+  "date": "2026-11-04",
+  "questions": "rust-example/questions/v4.toml",
+  "files": 206,
+  "answered": 206,
+  "failed": {},
+  "price_per_million": 0.02,
+  "cost": 0.017202,
+  "wall_seconds": 13.3,
+  "latency_p50": 0.48,
+  "latency_p95": 0.69,
+  "calls_per_file": 1
+}

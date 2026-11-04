@@ -88,6 +88,26 @@ jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$QUESTIONS" 'check' >/dev/
   echo "jev rejected $QUESTIONS:" >&2; cat "$WORK/preflight.err" >&2; exit 1
 }
 
+# Models that refuse more than this many questions in one call get them over
+# several calls per function. Each question is answered on its own either way.
+case $MODEL in
+  nace-ai/drex-max) PER_CALL=16 ;;
+  *) PER_CALL=0 ;;
+esac
+mkdir -p "$WORK/parts"
+jev --dry-run -q "$QUESTIONS" 'check' | jq '.questions' > "$WORK/questions.json"
+COUNT=$(jq 'length' "$WORK/questions.json")
+if [ "$PER_CALL" -gt 0 ] && [ "$COUNT" -gt "$PER_CALL" ]; then
+  CALLS=$(( (COUNT + PER_CALL - 1) / PER_CALL ))
+  SIZE=$(( (COUNT + CALLS - 1) / CALLS ))
+  for i in $(seq 0 $((CALLS - 1))); do
+    jq --argjson i "$i" --argjson n "$SIZE" 'to_entries[$i * $n:($i + 1) * $n] | from_entries' \
+      "$WORK/questions.json" > "$WORK/parts/$i.json"
+  done
+else
+  cp "$WORK/questions.json" "$WORK/parts/0.json"
+fi
+
 awk '
   /^# hint:/ { sub(/^# hint: */, ""); hint = $0; next }
   /^name *=/ && hint != "" { sub(/^name *= *"/, ""); sub(/".*$/, ""); print $0 "\t" hint; hint = "" }
@@ -115,14 +135,23 @@ jq -r --arg dir "$WORK/fn" '
 ' "$WORK/entities.jsonl" | sh
 
 if [ "$N" -gt 0 ]; then
+  export JEV_REVIEW_MODEL=$MODEL
   ls "$WORK"/fn/*.code | xargs -P "$JOBS" -I{} sh -c '
-    code=$1; questions=$2; shift 2; base=${code%.code}
-    for attempt in 1 2 3; do
-      jev "$@" -f "$code" -q "$questions" --json > "$base.out" 2> "$base.err" && exit 0
-      sleep "$attempt"
+    code=$1; shift; base=${code%.code}
+    for part in "$@"; do
+      out=$base.$(basename "$part" .json).part
+      ok=
+      for attempt in 1 2 3; do
+        jev ${JEV_REVIEW_MODEL:+-m "$JEV_REVIEW_MODEL"} -f "$code" -q "$part" --json > "$out" 2> "$base.err" && { ok=1; break; }
+        sleep "$attempt"
+      done
+      [ -n "$ok" ] || {
+        jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
+        exit 0
+      }
     done
-    jq -Rs "{error: (if . == \"\" then \"no reply\" else . end)}" < "$base.err" > "$base.out"
-  ' _ {} "$QUESTIONS" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
+    jq -s "{answers: (map(.answers) | add), usage: {cost: (map(.usage.cost // 0) | add)}}" "$base".*.part > "$base.out"
+  ' _ {} "$WORK"/parts/*.json
 
   jq -nc --slurpfile e "$WORK/entities.jsonl" '
     (reduce inputs as $o ({};

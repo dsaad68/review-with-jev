@@ -1,0 +1,17 @@
+{
+  "model": "microsoft/microsoft-decision-1",
+  "served": [
+    "microsoft/microsoft-decision-1-20261009"
+  ],
+  "date": "2026-11-04",
+  "questions": "rust-example/questions/v4.toml",
+  "files": 206,
+  "answered": 206,
+  "failed": {},
+  "price_per_million": 0.042,
+  "cost": 0.035602,
+  "wall_seconds": 21.7,
+  "latency_p50": 0.76,
+  "latency_p95": 1.22,
+  "calls_per_file": 1
+}

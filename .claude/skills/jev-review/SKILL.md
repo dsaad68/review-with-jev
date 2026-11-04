@@ -49,7 +49,16 @@ window, price and inputs, or from `jev --help` offline. The supported ones in fu
 | `togethercomputer/tev1-4b-experimental` | Together AI's experimental Tev1 4B |
 | `scaledown/classify-1` | ScaleDown's Classify 1 |
 
-Every check is a yes/no question about text, so all of them can run it. Tell the user that the
+Every check is a yes/no question about text, so all of them can run it; `nace-ai/drex-max` takes
+at most 16 questions a call, and the script splits the checks over two calls for it. When asking,
+share the benchmark in this repository's `benchmark/README.md` (November 2026, 206 labelled files)
+if the user wants a recommendation: `~liquid/d1-ultra-latest` did best at the default threshold
+(103/108 issues found, 11 false alarms, Jev's price), `nace-ai/drex-max` found the most (105/108,
+24 false alarms, about twice the cost and latency), `~liquid/d1-latest` was cheapest (half Jev's
+cost), and `microsoft/microsoft-decision-1` and `baseten/elephant-1` need a higher `-t` (best at
+0.95 and 0.80). With a model other than Jev, pass its best threshold from the benchmark with `-t`.
+
+Tell the user that the
 accuracy numbers in this repository's README were measured on `typesafe/jev-1.13`. Jev 1.14
 ranks as well but scores higher, so it raises more false alarms at 0.5 on `needless_collect`,
 `needless_clone`, `manual_reimpl`, `unwrap` and `stringly_typed`. Any other model's scores
