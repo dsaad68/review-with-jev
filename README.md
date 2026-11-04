@@ -8,21 +8,24 @@ It combines two tools:
 
 - **[sem](https://github.com/Ataraxy-Labs/sem)** finds which functions a diff added or changed, and
   gives each one's new code.
-- **[fuzzy-jev](https://github.com/dsaad68/fuzzy-jev)** (the `jev` command) asks Jev, TypeSafe's
-  model on OpenRouter's decisions endpoint, a fixed set of yes/no questions about each function and
-  returns a probability per question instead of prose.
+- **[fuzzy-jev](https://github.com/dsaad68/fuzzy-jev)** (the `jev` command) asks a model on
+  OpenRouter's decisions endpoint a fixed set of yes/no questions about each function and returns a
+  probability per question instead of prose. The review uses Liquid's `~liquid/d1-ultra-latest` by
+  default, the best of nine models [benchmarked](benchmark/) on these checks; TypeSafe's Jev and the
+  others are a `-M` away.
 
 Every changed function is reviewed against 18 checks in one call, 16 calls at a time. A typical
 change takes about a second and costs a fraction of a cent: the demo below reviews 14 functions for
-$0.0023 (at OpenRouter's prices in October 2026; costs here are what fuzzy-jev reported at the time).
+$0.0021 (at OpenRouter's prices in November 2026; costs here are what fuzzy-jev reported at the time).
 
 ```text
-no_cow.rs:37  load
-  0.96  double_lookup       Use the entry API instead of looking the key up twice
-  0.86  silent_error        Report or count errors instead of silently dropping them
-
 main.rs:1  last_word
-  0.93  unsigned_underflow  Guard the unsigned subtraction (checked_sub / saturating_sub)
+  0.99  unsigned_underflow  Guard the unsigned subtraction (checked_sub / saturating_sub)
+  0.90  unwrap              Return an error instead of unwrap/expect on input that can fail
+
+no_cow.rs:37  load
+  0.98  double_lookup       Use the entry API instead of looking the key up twice
+  0.93  silent_error        Report or count errors instead of silently dropping them
 ```
 
 ## How it works
@@ -33,7 +36,7 @@ flowchart TD
     B --> C["Changed functions<br/>file, name, line and new code"]
     C --> D{{"One jev call per function<br/>16 calls in parallel"}}
     Q["reference/rust.toml<br/>18 yes/no questions"] --> D
-    D --> E["Jev on OpenRouter<br/>answers every question at once"]
+    D --> E["A decision model on OpenRouter<br/>d1-ultra by default<br/>answers every question at once"]
     E --> F["A probability per check<br/>e.g. double_lookup 0.96"]
     F --> G["Keep answers above the threshold<br/>and attach each check's hint"]
     G --> H["Report<br/>plain text, or a table with --markdown"]
@@ -76,15 +79,16 @@ a table instead, for a PR comment or a file. A summary line (findings, cost, tim
 
 ### Choosing a model
 
-By default `jev` asks `~typesafe/jev-latest`, whichever Jev is newest. fuzzy-jev 0.7 supports 33
-models on OpenRouter's decisions endpoint; `jev --list-models` lists them with each one's context
-window, price and inputs. Pick one with `-M <id>` or by setting `JEV_MODEL`, which `eval.py` reads
-too. Every check is a yes/no question about text, so any of them can run the review, but the
-numbers below were measured on `typesafe/jev-1.13`; [the benchmark](#other-models) compares nine
-models, and `eval.py` checks any other. Pin a
-version such as `typesafe/jev-1.14` if scores should not shift when a new Jev comes out.
+The review asks `~liquid/d1-ultra-latest` by default: of the nine models in
+[the benchmark](#other-models) it did best at the default threshold, for the same price as Jev.
+fuzzy-jev 0.7 supports 33 models on OpenRouter's decisions endpoint; `jev --list-models` lists them
+with each one's context window, price and inputs. Pick another with `-M <id>` or by setting
+`JEV_MODEL`. Every check is a yes/no question about text, so any of them can run the review. Pin a
+version, such as `liquid/d1-ultra` or `typesafe/jev-1.14`, if scores should not shift when a new
+one comes out. `eval.py` asks jev's own default, Jev, unless `JEV_MODEL` is set, and the accuracy
+table below is Jev 1.13's.
 
-To pick a model once for a project, add a line to its `AGENTS.md` or `CLAUDE.md`:
+To pick a model for a project, add a line to its `AGENTS.md` or `CLAUDE.md`:
 
 ```markdown
 Jev model: typesafe/jev-1.14
@@ -104,9 +108,9 @@ clean edits (listed in [`demo/planted.tsv`](rust-example/demo/planted.tsv)), and
 [`.claude/skills/jev-review/`](.claude/skills/jev-review/) is a Claude Code skill. With this
 repository's `.claude/` folder in place, an agent asked to review a change runs the script and reads
 the results. Its [`SKILL.md`](.claude/skills/jev-review/SKILL.md) tells the agent to treat findings
-as leads to confirm in the code, not as verdicts, and lists the known false positives. If neither
-`AGENTS.md` nor `CLAUDE.md` names a `Jev model:`, the agent asks you which model to use, shows you the
-list, and offers to save your choice there.
+as leads to confirm in the code, not as verdicts, and lists the known false positives. The agent
+uses `~liquid/d1-ultra-latest` unless you name another model in the conversation or in a
+`Jev model:` line in `AGENTS.md` or `CLAUDE.md`, and says which model it used.
 
 ## The checks
 
@@ -241,9 +245,9 @@ better than others. Summary (full tables, per-check AUC and caveats in
 | Model | Mean AUC | Found at 0.5 | False alarms at 0.5 | Best threshold | Price ($/1M input) | Cost, 206 files |
 | --- | --- | --- | --- | --- | --- | --- |
 | `nace-ai/drex-max` | 0.997 | 105/108 | 24 | 0.80 | $0.060 | $0.071 |
-| `~liquid/d1-ultra-latest` | 0.997 | 103/108 | 11 | 0.60 | $0.042 | $0.036 |
+| `~liquid/d1-ultra-latest` (the review's default) | 0.997 | 103/108 | 11 | 0.60 | $0.042 | $0.036 |
 | `baseten/mammoth-1` | 0.995 | 104/108 | 55 | 0.70 | $0.100 | $0.090 |
-| `~typesafe/jev-latest` (default) | 0.991 | 99/108 | 75 | 0.65 | $0.042 | $0.038 |
+| `~typesafe/jev-latest` (jev's default) | 0.991 | 99/108 | 75 | 0.65 | $0.042 | $0.038 |
 | `~liquid/d1-latest` | 0.989 | 96/108 | 34 | 0.75 | $0.020 | $0.017 |
 | `microsoft/microsoft-decision-1` | 0.987 | 101/108 | 166 | 0.95 | $0.042 | $0.036 |
 | `cloudflare/clef` | 0.983 | 98/108 | 47 | 0.60 | $0.192 | $0.221 |
@@ -257,9 +261,9 @@ The best thresholds were picked on these same files, so treat them as a starting
 
 Things to know before relying on it:
 
-- **Each function is judged on its own.** Jev doesn't see callers or type definitions, so issues
-  that depend on context score lower even when real: `lossy_cast` and `lock_scope` came in at
-  0.56–0.67 in the demo. Callers also inherit their callees' findings.
+- **Each function is judged on its own.** The model doesn't see callers or type definitions, so
+  issues that depend on context score lower even when real: `lossy_cast` and `lock_scope` came in
+  at 0.78–0.80 in the demo with the default model, and 0.56–0.67 with Jev. Callers also inherit their callees' findings.
 - **`unwrap` fires on lock, join and channel-send unwraps**, which its question excludes.
 - **`needless_clone` overlaps with `cow`**: a `clone()` on a return path trips both.
 - **These are leads, not verdicts.** Use it to comment on PRs, not to block merges. Confirm a

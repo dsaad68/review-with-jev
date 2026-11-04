@@ -34,18 +34,24 @@ time.
 
 ## Choose the model first
 
-Before the first call in a project, look in `AGENTS.md` and `CLAUDE.md` (the project's, then the
-user's global ones) for the model to use, written as a line like `Jev model: typesafe/jev-1.14`. If
-one is set, pass it with `-m` on every call.
+Use `~liquid/d1-ultra-latest` by default, passed with `-m` on every call: it did best on the 18
+code-review checks in this repository's benchmark (`benchmark/README.md`, November 2026), at Jev's
+price. Use another
+model instead when the user asks for one, in this order:
 
-If none is set, **ask the user which model to use before making any call**, and show them the list:
-run `jev --list-models` (fuzzy-jev 0.7+; needs a connection, no key) for each model's context window,
-price and inputs, or `jev --help` for the supported ids offline. Lead with the default,
-`~typesafe/jev-latest`, and say which models can't do what the task needs: `respan/span-01*` are
-yes/no-only, and the text-only ones (`jaredpalmer/kev-4b`, `respan/span-01*`, `nace-ai/drex-v2.0`,
-`nace-ai/drex-v1.5`, `microsoft/microsoft-decision-1`, `upstage/solar-decide*`,
-`togethercomputer/tev1-4b-experimental`, `scaledown/classify-1`) read no images. After they choose,
-offer to add the `Jev model:` line to `AGENTS.md` or `CLAUDE.md` so they aren't asked again.
+1. **The user names a model in the conversation** ("use Jev", "try `nace-ai/drex-max`"). That wins
+   for as long as they don't say otherwise.
+2. **A `Jev model:` line in `AGENTS.md` or `CLAUDE.md`**, the project's first, then the user's
+   global ones, e.g. `Jev model: typesafe/jev-1.14`.
+3. Otherwise the default above. Say which model you used when you report the answers.
+
+Quote a `~` id in the shell. If the user wants to see the options, run `jev --list-models` (needs a
+connection, no key) for each model's context window, price and inputs, or `jev --help` offline.
+Check the chosen model can do the task: `respan/span-01*` answer yes/no only, and
+`jaredpalmer/kev-4b`, `respan/span-01*`, `nace-ai/drex-v2.0`, `nace-ai/drex-v1.5`,
+`microsoft/microsoft-decision-1`, `upstage/solar-decide*`, `togethercomputer/tev1-4b-experimental`
+and `scaledown/classify-1` read no images. `nace-ai/drex-max` takes at most 16 questions a call.
+If the user picks a model for good, offer to add the `Jev model:` line to `AGENTS.md` or `CLAUDE.md`.
 
 ## Ask
 

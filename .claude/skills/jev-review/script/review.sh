@@ -9,7 +9,7 @@ Finds changed functions with sem, asks Jev every question about each one in
 parallel, and prints what could be improved in each.
 
   -m, --markdown  print a markdown table instead of plain text
-  -M  the Jev model, e.g. typesafe/jev-1.14          (default \$JEV_MODEL, else jev's own default;
+  -M  the model, e.g. typesafe/jev-1.14              (default \$JEV_MODEL, else ~liquid/d1-ultra-latest;
                                                     'jev --list-models' lists them)
   -l  language: reference/<lang>.toml               (default rust; available: $(available))
   -q  questions file instead of -l
@@ -28,7 +28,8 @@ SKILL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 available() { ls "$SKILL_DIR/reference" 2>/dev/null | sed -n 's/\.toml$//p' | paste -sd, -; }
 
 LANG_NAME=rust
-MODEL=${JEV_MODEL:-}
+# The default: the best at 0.5 in benchmark/README.md, at Jev's price.
+MODEL=${JEV_MODEL:-"~liquid/d1-ultra-latest"}
 QUESTIONS=
 THRESHOLD=0.5
 OUT=-
