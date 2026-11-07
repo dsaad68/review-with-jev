@@ -44,7 +44,7 @@ flowchart TD
 
 Each function is sent on its own, so findings point at a specific function and a slow or failed
 call only affects that one; failed calls are retried three times and then listed separately. All
-18 questions go in the same call, and Jev answers them independently, so adding a check costs a
+18 questions go in the same call, and the model answers them independently, so adding a check costs a
 few tokens rather than another call.
 
 ## Quick start
