@@ -81,7 +81,7 @@ a table instead, for a PR comment or a file. A summary line (findings, cost, tim
 
 The review asks `~liquid/d1-ultra-latest` by default: of the nine models in
 [the benchmark](#other-models) it did best at the default threshold, for the same price as Jev.
-fuzzy-jev 0.7 supports 33 models on OpenRouter's decisions endpoint; `jev --list-models` lists them
+fuzzy-jev 0.7.5 supports 35 models on OpenRouter's decisions endpoint; `jev --list-models` lists them
 with each one's context window, price and inputs. Pick another with `-M <id>` or by setting
 `JEV_MODEL`. Every check is a yes/no question about text, so any of them can run the review. Pin a
 version, such as `liquid/d1-ultra` or `typesafe/jev-1.14`, if scores should not shift when a new
