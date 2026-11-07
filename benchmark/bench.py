@@ -48,7 +48,7 @@ MODELS = [
 # Models that refuse more questions than this in one call: their questions are
 # split over several calls per file. Each question is answered on its own, so
 # this changes the cost and the time, not the scores.
-MAX_QUESTIONS = {"nace-ai/drex-max": 16}
+MAX_QUESTIONS = {"nace-ai/drex-max": 16, "parallel/decisions-fast:free": 100, "morph/reflex": 128}
 
 
 def split(questions, model, workdir):
