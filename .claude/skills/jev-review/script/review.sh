@@ -85,7 +85,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/fn"
 
-jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
+jev --dry-run -q "$QUESTIONS" 'check' >/dev/null 2>"$WORK/preflight.err" || {
   echo "jev rejected $QUESTIONS:" >&2; cat "$WORK/preflight.err" >&2; exit 1
 }
 
@@ -93,6 +93,8 @@ jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$QUESTIONS" 'check' >/dev/
 # several calls per function. Each question is answered on its own either way.
 case $MODEL in
   nace-ai/drex-max) PER_CALL=16 ;;
+  parallel/decisions-fast:free) PER_CALL=100 ;;
+  morph/reflex) PER_CALL=128 ;;
   *) PER_CALL=0 ;;
 esac
 mkdir -p "$WORK/parts"
@@ -108,6 +110,14 @@ if [ "$PER_CALL" -gt 0 ] && [ "$COUNT" -gt "$PER_CALL" ]; then
 else
   cp "$WORK/questions.json" "$WORK/parts/0.json"
 fi
+
+# Check the model against each call as it will be made: jev refuses a model it
+# doesn't know, a question type it can't answer, or more questions than it takes.
+for part in "$WORK"/parts/*.json; do
+  jev --dry-run ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} -q "$part" 'check' >/dev/null 2>"$WORK/preflight.err" || {
+    echo "jev rejected $QUESTIONS${MODEL:+ for $MODEL}:" >&2; cat "$WORK/preflight.err" >&2; exit 1
+  }
+done
 
 awk '
   /^# hint:/ { sub(/^# hint: */, ""); hint = $0; next }
