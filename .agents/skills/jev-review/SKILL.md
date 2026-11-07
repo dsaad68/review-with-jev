@@ -35,7 +35,7 @@ of 108 issues found with 11 false alarms, at Jev's price. Use another model inst
 Say which model reviewed the code when you report the findings. If the user picks a model for good,
 offer to add the `Jev model:` line to `AGENTS.md` or `CLAUDE.md`. If they ask what the options are,
 run `jev --list-models` (needs a connection, no key) for each model's context window, price and
-inputs, or `jev --help` offline. The supported ones in fuzzy-jev 0.7:
+inputs, or `jev --help` offline. The supported ones in fuzzy-jev 0.7.5 and later:
 
 | Model | |
 | --- | --- |
@@ -57,6 +57,8 @@ inputs, or `jev --help` offline. The supported ones in fuzzy-jev 0.7:
 | `upstage/solar-decide`, `upstage/solar-decide-flash` | Upstage's Solar Decide |
 | `togethercomputer/tev1-4b-experimental` | Together AI's experimental Tev1 4B |
 | `scaledown/classify-1` | ScaleDown's Classify 1 |
+| `parallel/decisions-fast:free` | Parallel's Decisions Fast; free, and also researches the live web, which a code review doesn't need |
+| `morph/reflex` | Morph's Reflex |
 
 Every check is a yes/no question about text, so all of them can run it. From the benchmark, for a
 user choosing: `nace-ai/drex-max` found the most (105/108, 24 false alarms, about twice the cost and
